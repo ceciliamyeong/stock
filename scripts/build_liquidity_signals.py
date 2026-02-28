@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 
-ROOT = Path(__file__).resolve().parents[1] (프로젝트 루트 폴더)
+ROOT = Path(__file__).resolve().parents[1] 
 DATA_IN = ROOT / "data" / "history" / "liquidity_daily.csv"
 OUT_DIR = ROOT / "data" / "derived"
 OUT_CSV = OUT_DIR / "liquidity_signals_daily.csv"
