@@ -34,6 +34,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions@users.noreply.github.com"
+          git add data/derived/*.csv data/derived/*.json data/derived/charts/*.png || true
           git add -A
           git commit -m "Daily update" || echo "No changes"
           git push
