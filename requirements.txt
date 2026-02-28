@@ -4,4 +4,4 @@ requests
 matplotlib
 jinja2
 python-dateutil
-pykrx
+pykrx==1.2.4
