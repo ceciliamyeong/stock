@@ -1,7 +1,8 @@
-import requests
 import datetime as dt
+import time
 import random
 import pandas as pd
+import requests
 
 BASE = "https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
 
@@ -12,25 +13,21 @@ HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
 }
 
-def _post(payload: dict, session: requests.Session):
-    # ✅ 세션으로 먼저 메인 페이지 한번 찍어서 쿠키 확보
-    session.get("https://data.krx.co.kr", headers=HEADERS, timeout=30)
+MKT_MAP = {
+    "KOSPI": "STK",
+    "KOSDAQ": "KSQ",
+}
 
-    # ✅ 약간의 랜덤 딜레이(봇 패턴 완화)
+
+def _get_session():
+    s = requests.Session()
+    s.get("https://data.krx.co.kr", headers=HEADERS, timeout=30)
     time.sleep(0.6 + random.random() * 0.8)
+    return s
 
-    r = session.post(BASE, headers=HEADERS, data=payload, timeout=30)
 
-    # ✅ 에러면 상태코드 + 본문 일부 노출 (Actions 로그용)
-    if r.status_code != 200:
-        raise RuntimeError(f"KRX HTTP {r.status_code} body[:200]={r.text[:200]}")
-    return r
-
-def fetch_investor_flow(date: dt.date, market: str):
-    mkt_map = {
-        "KOSPI": "STK",
-        "KOSDAQ": "KSQ"
-    }
+def fetch_investor_flow_range(start: dt.date, end: dt.date, market: str) -> pd.DataFrame:
+    session = _get_session()
 
     payload = {
         "bld": "dbms/MDC/STAT/standard/MDCSTAT02201",
@@ -38,29 +35,58 @@ def fetch_investor_flow(date: dt.date, market: str):
         "inqTpCd": "1",
         "trdVolVal": "2",
         "askBid": "3",
-        "mktId": mkt_map[market],
-        "strtDd": date.strftime("%Y%m%d"),
-        "endDd": date.strftime("%Y%m%d"),
+        "mktId": MKT_MAP[market],
+        "strtDd": start.strftime("%Y%m%d"),
+        "endDd": end.strftime("%Y%m%d"),
         "share": "2",
         "money": "3",
-        "csvxls_isNo": "false"
+        "csvxls_isNo": "false",
     }
 
-    session = requests.Session()
-    r = _post(payload, session)
+    r = session.post(BASE, headers=HEADERS, data=payload, timeout=30)
+
+    if r.status_code != 200:
+        raise RuntimeError(f"KRX HTTP {r.status_code} body[:200]={r.text[:200]}")
+
     js = r.json()
+    df = pd.DataFrame(js.get("OutBlock_1", []))
 
-    df = pd.DataFrame(js["OutBlock_1"])
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "date", "market",
+            "retail_net", "foreign_net", "institution_net"
+        ])
 
-    # 개인 / 외국인 / 기관 합계 추출
-    retail = df.loc[df["INVST_TP_NM"] == "개인", "NET_BUY_AMT"].values
-    foreign = df.loc[df["INVST_TP_NM"] == "외국인", "NET_BUY_AMT"].values
-    inst = df.loc[df["INVST_TP_NM"] == "기관합계", "NET_BUY_AMT"].values
+    df = df.rename(columns={
+        "TRD_DD": "date",
+        "INVST_TP_NM": "investor",
+        "NET_BUY_AMT": "net_buy_amt",
+    })
 
-    return {
-        "date": date.isoformat(),
+    df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
+    df["net_buy_amt"] = (
+        df["net_buy_amt"]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .astype(float)
+    )
+
+    pivot = (
+        df.pivot_table(
+            index="date",
+            columns="investor",
+            values="net_buy_amt",
+            aggfunc="sum"
+        )
+        .reset_index()
+    )
+
+    out = pd.DataFrame({
+        "date": pivot["date"],
         "market": market,
-        "retail_net": float(retail[0]) if len(retail) else None,
-        "foreign_net": float(foreign[0]) if len(foreign) else None,
-        "institution_net": float(inst[0]) if len(inst) else None,
-    }
+        "retail_net": pivot.get("개인"),
+        "foreign_net": pivot.get("외국인"),
+        "institution_net": pivot.get("기관합계"),
+    })
+
+    return out
