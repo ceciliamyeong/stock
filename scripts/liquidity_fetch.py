@@ -1,7 +1,40 @@
 # scripts/liquidity_fetch.py
 import datetime as dt
+
 import pandas as pd
 from pykrx import stock
+
+# --- pykrx hotfix: '지수명' 컬럼명이 바뀌거나 누락된 경우를 대비 ---
+def _patch_pykrx_index_ticker():
+    try:
+        from pykrx.website.krx.market.ticker import IndexTicker
+
+        def _safe_get_name(self, ticker):
+            # 원래 기대: self.df.loc[ticker, "지수명"]
+            if "지수명" in self.df.columns:
+                return self.df.loc[ticker, "지수명"]
+
+            # 1) '지수명'을 포함한 컬럼 찾기 (공백/변형 대응)
+            for c in self.df.columns:
+                if "지수명" in str(c):
+                    return self.df.loc[ticker, c]
+
+            # 2) '지수' 포함 컬럼 찾기
+            for c in self.df.columns:
+                if "지수" in str(c):
+                    return self.df.loc[ticker, c]
+
+            # 3) 최후: 첫 번째 컬럼
+            return self.df.loc[ticker, self.df.columns[0]]
+
+        IndexTicker.get_name = _safe_get_name
+
+    except Exception:
+        # 패치 실패해도 나머지 로직(거래대금 등)은 계속 돌 수 있게
+        pass
+
+
+_patch_pykrx_index_ticker()
 
 
 INDEX_TICKER = {
@@ -29,10 +62,9 @@ def fetch_liquidity_range(start: dt.date, end: dt.date, market: str) -> pd.DataF
     s = _to_ymd(start)
     e = _to_ymd(end)
 
-    # 1) Index OHLCV by *ticker* (avoid pykrx '지수명' path)
+    # 1) Index close (ticker 기반)
     ticker = INDEX_TICKER[market]
-    idx = stock.get_index_ohlcv_by_date(s, e, ticker)
-    idx = idx.reset_index()
+    idx = stock.get_index_ohlcv_by_date(s, e, ticker).reset_index()
 
     date_col = _pick_any_col(idx, ["날짜", "Date", "date"])
     close_col = _pick_any_col(idx, ["종가", "Close", "close"])
@@ -46,8 +78,7 @@ def fetch_liquidity_range(start: dt.date, end: dt.date, market: str) -> pd.DataF
     )
 
     # 2) Market trading value by date (turnover)
-    tv = stock.get_market_trading_value_by_date(s, e, market=market)
-    tv = tv.reset_index()
+    tv = stock.get_market_trading_value_by_date(s, e, market=market).reset_index()
 
     tv_date_col = _pick_any_col(tv, ["날짜", "Date", "date"])
     turnover_col = _pick_any_col(
