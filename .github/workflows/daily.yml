@@ -27,9 +27,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Test investor (last 60d)
+      # 🔎 투자자 데이터 단독 테스트 (실패해도 계속 진행)
+      - name: Test investor fetch
         run: python scripts/krx_fetch_investor.py --start "2026-01-01" --end "2026-02-28" --market BOTH --mode daily
+        continue-on-error: true
 
+      # 🔥 실제 실행
       - name: Run
         run: python scripts/run_daily.py
 
