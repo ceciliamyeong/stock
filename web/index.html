@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>장마감 한눈에 보기</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <h1 id="date"></h1>
+
+    <div class="tabs">
+      <button onclick="setMarket('KOSPI')">KOSPI</button>
+      <button onclick="setMarket('KOSDAQ')">KOSDAQ</button>
+    </div>
+
+    <div class="card">
+      <h2 id="market-name"></h2>
+      <div class="big-number" id="close"></div>
+      <div id="turnover"></div>
+      <div class="flow">
+        <div id="foreign"></div>
+        <div id="institution"></div>
+        <div id="individual"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>시총 TOP10</h3>
+      <img id="treemap" width="100%">
+    </div>
+
+  </div>
+
+<script src="app.js"></script>
+</body>
+</html>
