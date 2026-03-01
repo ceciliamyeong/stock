@@ -1,9 +1,77 @@
 {
   "date": "2026-02-27",
+  "version": "1.0",
+  "markets": {
+    "KOSDAQ": {
+      "close": 1192.78,
+      "turnover_krw": 14846572000000.0,
+      "turnover_readable": "+14.85조",
+      "investor_net_krw": {
+        "foreign": 620000000000.0,
+        "institution": 4460000000000.0,
+        "individual": -4720000000000.0
+      },
+      "investor_net_readable": {
+        "foreign": "+6200억",
+        "institution": "+4.46조",
+        "individual": "-4.72조"
+      },
+      "investor_ratio": {
+        "foreign": 0.041760481813579595,
+        "institution": 0.30040604659445963,
+        "individual": -0.31791850670983174
+      },
+      "flow_signal": {
+        "foreign": "NORMAL",
+        "institution": "STRONG",
+        "individual": "STRONG"
+      }
+    },
+    "KOSPI": {
+      "close": 6244.13,
+      "turnover_krw": 54939339000000.0,
+      "turnover_readable": "+54.94조",
+      "investor_net_krw": {
+        "foreign": -70530000000000.0,
+        "institution": 5670000000000.0,
+        "individual": 62500000000000.0
+      },
+      "investor_net_readable": {
+        "foreign": "-70.53조",
+        "institution": "+5.67조",
+        "individual": "+62.50조"
+      },
+      "investor_ratio": {
+        "foreign": -1.2837795518435342,
+        "institution": 0.10320473640936961,
+        "individual": 1.1376183466641272
+      },
+      "flow_signal": {
+        "foreign": "STRONG",
+        "institution": "STRONG",
+        "individual": "STRONG"
+      }
+    }
+  },
   "extras": {
-    "top10_treemap": {},
-    "treemap_png": {},
-    "KOSPI_error": "\"None of [Index(['종가', '시가총액', '거래량', '거래대금'], dtype='object')] are in the [columns]\"",
-    "KOSDAQ_error": "\"None of [Index(['종가', '시가총액', '거래량', '거래대금'], dtype='object')] are in the [columns]\""
+    "top10_treemap": {
+      "KOSPI": [],
+      "KOSDAQ": []
+    },
+    "treemap_png": {
+      "KOSPI": "data/derived/charts/treemap_kospi_top10_latest.png",
+      "KOSDAQ": "data/derived/charts/treemap_kosdaq_top10_latest.png"
+    },
+    "volatility_top5": {
+      "KOSPI": [],
+      "KOSDAQ": []
+    },
+    "breadth": {
+      "KOSPI": {},
+      "KOSDAQ": {}
+    },
+    "top10_error": "\"None of [Index(['종가', '시가총액', '거래량', '거래대금'], dtype='object')] are in the [columns]\"",
+    "volatility_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\"",
+    "breadth_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\""
   }
 }
