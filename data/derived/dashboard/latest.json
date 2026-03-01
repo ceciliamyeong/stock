@@ -54,15 +54,24 @@
     }
   },
   "extras": {
-    "top10_treemap": {},
+    "top10_treemap": {
+      "KOSPI": [],
+      "KOSDAQ": []
+    },
     "treemap_png": {
       "KOSPI": "data/derived/charts/treemap_kospi_top10_latest.png",
       "KOSDAQ": "data/derived/charts/treemap_kosdaq_top10_latest.png"
     },
+    "volatility_top5": {
+      "KOSPI": [],
+      "KOSDAQ": []
+    },
+    "breadth": {
+      "KOSPI": {},
+      "KOSDAQ": {}
+    },
     "top10_error": "Cannot find previous business day for 2026-02-27",
-    "volatility_top5": {},
     "volatility_error": "Cannot find previous business day for 2026-02-27",
-    "breadth": {},
     "breadth_error": "Cannot find previous business day for 2026-02-27"
   }
 }
