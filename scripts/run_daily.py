@@ -136,52 +136,91 @@ def _read_investor_daily() -> pd.DataFrame:
     pivot = pivot.sort_values(["date", "market"]).reset_index(drop=True)
     return pivot
 
-
 def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataFrame:
     """
     liquidity(date, market)에 investor net을 left merge.
     ratio = net / turnover_krw 추가.
+
+    안정성 목표:
+    - duplicate suffix(_x/_y)로 MergeError가 절대 나지 않게 강제
+    - investor 중복행(date, market)이 있어도 groupby로 1행 정리
+    - turnover_krw==0이면 ratio는 NA
     """
-    # ---- SAFE MERGE GUARD ----
+    # 방어: 입력이 None이면 그대로 반환
+    if liquidity is None or liquidity.empty:
+        return liquidity
+
+    if investor is None:
+        investor = pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
+
     net_cols = ["foreign_net", "institution_net", "individual_net"]
 
-    # liquidity에 net 컬럼이 있으면 제거 (investor를 source of truth로)
-    for c in net_cols:
-        if c in liquidity.columns:
-            liquidity = liquidity.drop(columns=[c])
+    # -----------------------------
+    # HARD SAFE MERGE (suffix 원천 차단)
+    # -----------------------------
 
-    # investor에 *_net_x/_net_y 같은 잔재가 있으면 제거
-    drop_junk = [c for c in investor.columns if c.endswith("_net_x") or c.endswith("_net_y")]
-    if drop_junk:
-        investor = investor.drop(columns=drop_junk)
+    # 1) liquidity 쪽에 net 컬럼이 있으면 제거 (investor가 source of truth)
+    liq_drop = [c for c in net_cols if c in liquidity.columns]
+    if liq_drop:
+        liquidity = liquidity.drop(columns=liq_drop)
 
-    # investor가 비어있지 않으면 (date/market 단위로 1행 정리)
-    if investor is not None and not investor.empty:
-        # 존재하는 net 컬럼만 사용 (KeyError 방지)
-        present_net_cols = [c for c in net_cols if c in investor.columns]
+    # 2) investor에 이전 merge 잔재(*_net_x, *_net_y)가 있으면 제거
+    junk = [c for c in investor.columns if c.endswith("_net_x") or c.endswith("_net_y")]
+    if junk:
+        investor = investor.drop(columns=junk)
 
-        # 혹시 net 컬럼이 하나도 없으면 merge만 하고 ratio는 스킵되도록
-        if present_net_cols:
-            investor[present_net_cols] = investor[present_net_cols].apply(pd.to_numeric, errors="coerce")
-            investor = (
-                investor.groupby(["date", "market"], as_index=False)[present_net_cols]
-                .sum(min_count=1)
-            )
+    # 3) investor net 컬럼은 merge 전에 임시 이름으로 rename해서 충돌 자체를 불가능하게
+    rename_map = {c: f"{c}__inv" for c in net_cols if c in investor.columns}
+    if rename_map:
+        investor = investor.rename(columns=rename_map)
 
-    # merge
+    # 4) date/market 단위로 1행 정리 (있을 때만)
+    #    - present_inv_cols가 비어있으면 groupby 스킵
+    present_inv_cols = list(rename_map.values())
+    if not investor.empty and {"date", "market"}.issubset(set(investor.columns)) and present_inv_cols:
+        investor[present_inv_cols] = investor[present_inv_cols].apply(pd.to_numeric, errors="coerce")
+        investor = (
+            investor.groupby(["date", "market"], as_index=False)[present_inv_cols]
+            .sum(min_count=1)
+        )
+
+    # 5) merge
     out = liquidity.merge(investor, on=["date", "market"], how="left")
 
-    denom = out["turnover_krw"].replace({0: pd.NA})
+    # 6) 컬럼명 복원
+    back_map = {v: k for k, v in rename_map.items()}
+    if back_map:
+        out = out.rename(columns=back_map)
+
+    # -----------------------------
+    # Ratios
+    # -----------------------------
+    if "turnover_krw" in out.columns:
+        denom = pd.to_numeric(out["turnover_krw"], errors="coerce").replace({0: pd.NA})
+    else:
+        denom = pd.Series([pd.NA] * len(out))
 
     if "individual_net" in out.columns:
+        out["individual_net"] = pd.to_numeric(out["individual_net"], errors="coerce")
         out["individual_ratio"] = out["individual_net"] / denom
+
     if "foreign_net" in out.columns:
+        out["foreign_net"] = pd.to_numeric(out["foreign_net"], errors="coerce")
         out["foreign_ratio"] = out["foreign_net"] / denom
+
     if "institution_net" in out.columns:
+        out["institution_net"] = pd.to_numeric(out["institution_net"], errors="coerce")
         out["institution_ratio"] = out["institution_net"] / denom
 
-    out = out.sort_values(["date", "market"]).reset_index(drop=True)
+    # 정렬/정리
+    sort_cols = [c for c in ["date", "market"] if c in out.columns]
+    if sort_cols:
+        out = out.sort_values(sort_cols).reset_index(drop=True)
+    else:
+        out = out.reset_index(drop=True)
+
     return out
+
 
 def _save_liquidity(df: pd.DataFrame):
     df.to_csv(LIQUIDITY_CSV, index=False)
