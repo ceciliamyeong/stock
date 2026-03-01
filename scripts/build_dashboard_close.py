@@ -145,19 +145,35 @@ def prev_business_day(date_str: str) -> str:
 
 def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
     prev_str = prev_business_day(date_str)
+    d = to_krx_date(date_str)
+    p_d = to_krx_date(prev_str)
 
-    cap = stock.get_market_cap_by_ticker(to_krx_date(date_str), market=market)
+    # 1. 시가총액 데이터 가져오기
+    cap = stock.get_market_cap_by_ticker(d, market=market)
     if cap is None or cap.empty:
         raise RuntimeError(f"pykrx cap empty: date={date_str}, market={market}")
 
-    prev_ohlcv = stock.get_market_ohlcv_by_ticker(to_krx_date(prev_str), market=market)
+    # 2. 전일 OHLCV 데이터 가져오기 (날짜 범위를 지정하는 방식이 더 안정적임)
+    prev_ohlcv = stock.get_market_ohlcv_by_ticker(p_d, p_d, market=market)
     if prev_ohlcv is None or prev_ohlcv.empty:
         raise RuntimeError(f"pykrx ohlcv empty: date={prev_str}, market={market}")
 
-    close_col = _pick_col(cap, ["종가", "Close"])
-    mcap_col = _pick_col(cap, ["시가총액", "Market Cap"])
-    prev_close_col = _pick_col(prev_ohlcv, ["종가", "Close"])
+    # ✅ 컬럼 매칭 후보군 확장 (버전/언어 차이 방어)
+    close_candidates = ["종가", "현재가", "Close"]
+    mcap_candidates = ["시가총액", "Market Cap", "시가총액(원)"]
 
+    try:
+        close_col = _pick_col(cap, close_candidates)
+        mcap_col = _pick_col(cap, mcap_candidates)
+        prev_close_col = _pick_col(prev_ohlcv, close_candidates)
+    except KeyError as e:
+        # 에러 발생 시 현재 어떤 컬럼들이 있는지 로그에 찍어서 디버깅을 도움
+        print(f"❌ Column Mapping Error in {market}!")
+        print(f"Cap Columns: {cap.columns.tolist()}")
+        print(f"OHLCV Columns: {prev_ohlcv.columns.tolist()}")
+        raise e
+
+    # 데이터 정리
     df = cap[[close_col, mcap_col]].copy()
     df = df.rename(columns={close_col: "close", mcap_col: "mcap"})
     df["ticker"] = df.index.astype(str)
@@ -166,14 +182,16 @@ def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
     prev_close = prev_ohlcv[[prev_close_col]].copy().rename(columns={prev_close_col: "prev_close"})
     prev_close["ticker"] = prev_close.index.astype(str)
 
+    # 병합 및 계산
     df = df.merge(prev_close.reset_index(drop=True), on="ticker", how="left")
-
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
     df["prev_close"] = pd.to_numeric(df["prev_close"], errors="coerce")
     df["mcap"] = pd.to_numeric(df["mcap"], errors="coerce")
 
+    # 수익률 계산 및 상위 10개 추출
     df["return_1d"] = (df["close"] / df["prev_close"] - 1.0) * 100.0
     df = df.dropna(subset=["mcap"]).sort_values("mcap", ascending=False).head(10).reset_index(drop=True)
+    
     return df[["ticker", "name", "close", "mcap", "return_1d"]]
 
 
