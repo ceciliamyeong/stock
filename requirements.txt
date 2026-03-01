@@ -5,3 +5,4 @@ matplotlib
 jinja2
 python-dateutil
 pykrx==1.2.4
+squarify
