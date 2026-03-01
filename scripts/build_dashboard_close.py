@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 print("RUNNING FILE:", __file__)
-print("VERSION: merge-removed-2026-03-01")
+print("VERSION: build_dashboard_close-final-2026-03-01")
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import pandas as pd
 
@@ -70,22 +70,27 @@ def unit_mult(raw_hint: str) -> float:
 def norm_inv(x: str) -> str:
     """
     Normalize investor_type to: foreign / institution / individual
-    - handles variants like 외국인계/외국인합계/기관계/개인계 etc.
+    Handles:
+      - 'institution_total'
+      - '개인(십억원)' / '외국인(십억원)' / '기관(십억원)' ...
+      - '기관합계', '기관계' ...
     """
     s = str(x).strip()
     if not s:
         return s
 
-    # english/internal keys
-    if s in ["foreign", "foreigner", "foreign_total"]:
-        return "foreign"
-    if s in ["institution", "institution_total"]:
-        return "institution"
-    if s in ["individual", "individual_total"]:
-        return "individual"
-
+    # drop '(...)' suffix
     base = s.split("(")[0].strip()
 
+    # english/internal keys
+    if base in ["foreign", "foreigner", "foreign_total"]:
+        return "foreign"
+    if base in ["institution", "institution_total", "institutions"]:
+        return "institution"
+    if base in ["individual", "individual_total"]:
+        return "individual"
+
+    # korean-ish
     if "외국" in base:
         return "foreign"
     if "기관" in base:
@@ -93,7 +98,7 @@ def norm_inv(x: str) -> str:
     if "개인" in base:
         return "individual"
 
-    return s
+    return base
 
 
 def signal_label(ratio: Optional[float], strong: float = 0.05, normal: float = 0.02) -> Optional[str]:
@@ -118,11 +123,11 @@ def to_dash_date(s: str) -> str:
     return s
 
 
-def _pick_col(df: pd.DataFrame, candidates: list[str]) -> str:
+def _pick_col(df: pd.DataFrame, candidates: List[str]) -> str:
     for c in candidates:
         if c in df.columns:
             return c
-    raise KeyError(f"None of candidates found in columns: {candidates} / got={df.columns.tolist()}")
+    raise KeyError(f"None of candidates found: {candidates} / got={df.columns.tolist()}")
 
 
 def prev_business_day(date_str: str) -> str:
@@ -198,7 +203,7 @@ def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path) -> None:
     plt.close()
 
 
-def fetch_volatility_top5(date_str: str, market: str) -> list[dict[str, Any]]:
+def fetch_volatility_top5(date_str: str, market: str) -> List[Dict[str, Any]]:
     prev_str = prev_business_day(date_str)
 
     today = stock.get_market_ohlcv_by_ticker(to_krx_date(date_str), market=market)
@@ -231,7 +236,10 @@ def fetch_volatility_top5(date_str: str, market: str) -> list[dict[str, Any]]:
     ]
 
 
-def fetch_breadth(date_str: str, market: str) -> dict[str, Any]:
+def fetch_breadth(date_str: str, market: str) -> Dict[str, Any]:
+    """
+    Breadth = 상승/하락/보합 종목 수 + 비율
+    """
     prev_str = prev_business_day(date_str)
 
     today = stock.get_market_ohlcv_by_ticker(to_krx_date(date_str), market=market)
@@ -296,18 +304,55 @@ def load_liq_df() -> pd.DataFrame:
 
 
 def load_inv_df() -> pd.DataFrame:
+    """
+    investor_flow_daily.csv 형태가 이미 pivot(=date/market/foreign_net...)일 수도 있고,
+    raw long-form(=date/market/investor_type/net_raw/raw_unit_hint)일 수도 있다.
+    둘 다 지원한다.
+    """
     if not INV_CSV.exists():
         raise FileNotFoundError(f"Missing {INV_CSV}")
+
     inv = pd.read_csv(INV_CSV)
     if inv.empty:
         return inv
+
     inv["date"] = pd.to_datetime(inv["date"], errors="coerce").dt.date.astype(str)
     inv["market"] = inv["market"].astype(str)
+
+    # case A) already pivoted
+    if {"foreign_net", "institution_net", "individual_net"}.issubset(set(inv.columns)):
+        for c in ["foreign_net", "institution_net", "individual_net"]:
+            inv[c] = pd.to_numeric(inv[c], errors="coerce")
+        return inv.sort_values(["date", "market"]).reset_index(drop=True)
+
+    # case B) long-form -> pivot
+    if "investor_type" not in inv.columns:
+        return pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
+
     inv["investor_type"] = inv["investor_type"].map(norm_inv)
+
+    # raw columns
     inv["net_raw"] = pd.to_numeric(inv.get("net_raw"), errors="coerce")
-    inv["net_krw"] = inv["net_raw"] * inv.get("raw_unit_hint", "").map(unit_mult)
-    inv = inv.dropna(subset=["date", "market", "investor_type"])
-    return inv.sort_values(["date", "market", "investor_type"]).reset_index(drop=True)
+    inv["raw_unit_hint"] = inv.get("raw_unit_hint", "")
+    inv["net_krw"] = inv["net_raw"] * inv["raw_unit_hint"].map(unit_mult)
+
+    keep = inv[inv["investor_type"].isin(["foreign", "institution", "individual"])].copy()
+    if keep.empty:
+        return pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
+
+    pivot = (
+        keep.groupby(["date", "market", "investor_type"], as_index=False)["net_krw"]
+        .sum(min_count=1)
+        .pivot_table(index=["date", "market"], columns="investor_type", values="net_krw", aggfunc="sum")
+        .reset_index()
+        .rename(columns={"foreign": "foreign_net", "institution": "institution_net", "individual": "individual_net"})
+    )
+
+    for c in ["foreign_net", "institution_net", "individual_net"]:
+        if c not in pivot.columns:
+            pivot[c] = pd.NA
+
+    return pivot.sort_values(["date", "market"]).reset_index(drop=True)
 
 
 def pick_latest_trade_date(liq: pd.DataFrame, inv: pd.DataFrame) -> str:
@@ -315,7 +360,6 @@ def pick_latest_trade_date(liq: pd.DataFrame, inv: pd.DataFrame) -> str:
         raise RuntimeError("liquidity_daily.csv is empty")
 
     latest_liq = sorted(liq["date"].unique())[-1]
-
     if inv is None or inv.empty:
         return latest_liq
 
@@ -323,8 +367,16 @@ def pick_latest_trade_date(liq: pd.DataFrame, inv: pd.DataFrame) -> str:
         sub = inv[inv["date"] == date_str]
         if sub.empty:
             return False
-        types = set(sub["investor_type"].unique().tolist())
-        return {"foreign", "institution", "individual"}.issubset(types)
+        types = set()
+        if {"foreign_net", "institution_net", "individual_net"}.issubset(set(sub.columns)):
+            # pivoted
+            # if at least one not-null exists for each column
+            ok = True
+            for c in ["foreign_net", "institution_net", "individual_net"]:
+                if sub[c].isna().all():
+                    ok = False
+            return ok
+        return False
 
     if has_core(latest_liq):
         return latest_liq
@@ -332,10 +384,6 @@ def pick_latest_trade_date(liq: pd.DataFrame, inv: pd.DataFrame) -> str:
     candidates = [d for d in sorted(inv["date"].unique()) if d <= latest_liq]
     if not candidates:
         return latest_liq
-
-    for d in reversed(candidates):
-        if has_core(d):
-            return d
 
     return candidates[-1]
 
@@ -351,37 +399,8 @@ def load_index_rows(liq: pd.DataFrame, date_str: str) -> pd.DataFrame:
     return day.sort_values(["market"]).reset_index(drop=True)
 
 
-def load_investor_pivot(inv: pd.DataFrame, date_str: str) -> pd.DataFrame:
-    """
-    Returns columns:
-      date, market, foreign_net, institution_net, individual_net (KRW)
-    """
-    if inv is None or inv.empty:
-        return pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
-
-    sub = inv[inv["date"] == date_str].copy()
-    if sub.empty:
-        return pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
-
-    keep = sub[sub["investor_type"].isin(["foreign", "institution", "individual"])].copy()
-    if keep.empty:
-        return pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
-
-    pivot = (
-        keep.groupby(["date", "market", "investor_type"], as_index=False)["net_krw"]
-        .sum()
-        .pivot_table(index=["date", "market"], columns="investor_type", values="net_krw", aggfunc="sum")
-        .reset_index()
-        .rename(columns={"foreign": "foreign_net", "institution": "institution_net", "individual": "individual_net"})
-    )
-
-    for c in ["foreign_net", "institution_net", "individual_net"]:
-        if c not in pivot.columns:
-            pivot[c] = pd.NA
-
-    return pivot.sort_values(["market"]).reset_index(drop=True)
-
 def build_market_cards(liq_day: pd.DataFrame, inv_pivot: pd.DataFrame) -> Dict[str, Any]:
+    # inv_pivot: date/market/foreign_net/institution_net/individual_net
     inv_map: Dict[str, dict] = {}
     if inv_pivot is not None and not inv_pivot.empty:
         for _, rr in inv_pivot.iterrows():
@@ -426,8 +445,8 @@ def build_market_cards(liq_day: pd.DataFrame, inv_pivot: pd.DataFrame) -> Dict[s
                 "individual": signal_label(ratios["individual"]),
             },
         }
-    return markets
 
+    return markets
 
 
 # ------------------------
@@ -443,38 +462,38 @@ def main():
     date_str = pick_latest_trade_date(liq, inv)
 
     liq_day = load_index_rows(liq, date_str)
-    inv_pivot = load_investor_pivot(inv, date_str)
+    inv_pivot = inv[inv["date"] == date_str].copy() if inv is not None and not inv.empty else pd.DataFrame()
 
+    # 프론트가 죽지 않도록 extras는 항상 기본 구조를 가진다
     dashboard: Dict[str, Any] = {
         "date": date_str,
         "version": "1.0",
         "markets": build_market_cards(liq_day, inv_pivot),
-        "extras": {},
+        "extras": {
+            "top10_treemap": {"KOSPI": [], "KOSDAQ": []},
+            "treemap_png": {
+                "KOSPI": "data/derived/charts/treemap_kospi_top10_latest.png",
+                "KOSDAQ": "data/derived/charts/treemap_kosdaq_top10_latest.png",
+            },
+            "volatility_top5": {"KOSPI": [], "KOSDAQ": []},
+            "breadth": {"KOSPI": {}, "KOSDAQ": {}},
+        },
     }
 
-    treemap_png = {
-        "KOSPI": "data/derived/charts/treemap_kospi_top10_latest.png",
-        "KOSDAQ": "data/derived/charts/treemap_kosdaq_top10_latest.png",
-    }
+    treemap_png = dashboard["extras"]["treemap_png"]
 
     # Top10 treemap + data (실패해도 latest.json은 반드시 생성)
     try:
-        top10: Dict[str, Any] = {}
         for mk in ["KOSPI", "KOSDAQ"]:
             df_top10 = fetch_top10_mcap_and_return(date_str, mk)
-            top10[mk] = df_top10.to_dict(orient="records")
+            dashboard["extras"]["top10_treemap"][mk] = df_top10.to_dict(orient="records")
 
             make_treemap_png(
                 df_top10,
                 f"{mk} 시총 TOP10 — {date_str}",
                 OUT_CHART / f"treemap_{mk.lower()}_top10_latest.png",
             )
-
-        dashboard["extras"]["top10_treemap"] = top10
-        dashboard["extras"]["treemap_png"] = treemap_png
     except Exception as e:
-        dashboard["extras"]["top10_treemap"] = {}
-        dashboard["extras"]["treemap_png"] = treemap_png
         dashboard["extras"]["top10_error"] = str(e)
 
     # Volatility top5
@@ -484,7 +503,7 @@ def main():
             "KOSDAQ": fetch_volatility_top5(date_str, "KOSDAQ"),
         }
     except Exception as e:
-        dashboard["extras"]["volatility_top5"] = {}
+        dashboard["extras"]["volatility_top5"] = {"KOSPI": [], "KOSDAQ": []}
         dashboard["extras"]["volatility_error"] = str(e)
 
     # Breadth
@@ -494,9 +513,10 @@ def main():
             "KOSDAQ": fetch_breadth(date_str, "KOSDAQ"),
         }
     except Exception as e:
-        dashboard["extras"]["breadth"] = {}
+        dashboard["extras"]["breadth"] = {"KOSPI": {}, "KOSDAQ": {}}
         dashboard["extras"]["breadth_error"] = str(e)
 
+    # archive + latest
     archive_path = OUT_ARCHIVE / f"{date_str}.json"
     latest_path = OUT_BASE / "latest.json"
 
@@ -507,6 +527,7 @@ def main():
     print("Archive:", archive_path)
     print("Latest:", latest_path)
     print("Charts:", OUT_CHART)
+    print("Treemap PNG paths:", treemap_png)
 
 
 if __name__ == "__main__":
