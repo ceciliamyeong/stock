@@ -22,9 +22,9 @@
         "individual": -0.031791850670983175
       },
       "flow_signal": {
-        "foreign": "WEAK",
-        "institution": "NORMAL",
-        "individual": "NORMAL"
+        "foreign": "WEAK_BUY",
+        "institution": "NORMAL_BUY",
+        "individual": "NORMAL_SELL"
       }
     },
     "KOSPI": {
@@ -47,9 +47,9 @@
         "individual": 0.11376183466641271
       },
       "flow_signal": {
-        "foreign": "STRONG",
-        "institution": "WEAK",
-        "individual": "STRONG"
+        "foreign": "STRONG_SELL",
+        "institution": "WEAK_BUY",
+        "individual": "STRONG_BUY"
       }
     }
   },
