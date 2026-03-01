@@ -2,7 +2,7 @@ name: KRX Flow Daily
 
 on:
   schedule:
-    - cron: "30 9 * * *"   # 18:30 KST (cron is UTC)
+    - cron: "30 9 * * *"   # 18:30 KST
   workflow_dispatch:
 
 permissions:
@@ -26,24 +26,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install "pykrx==1.0.45" squarify matplotlib pandas lxml
 
-      - name: Run
-        run: python scripts/run_daily.py
-
-      - name: Build dashboard
-        run: python -u scripts/build_dashboard_close.py
+      # 🔥 2월 27일 데이터를 처리하고 대시보드까지 생성합니다.
+      - name: Run Scripts
+        run: |
+          python scripts/run_daily.py
+          python scripts/build_dashboard_close.py
 
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions@users.noreply.github.com"
-          git add data/derived/dashboard \
-                  data/derived/charts \
-                  data/history/liquidity_daily.csv \
-                  data/derived/*.csv \
-                  data/derived/*.json \
-                  web || true
-          git commit -m "Daily dashboard update" || echo "No changes"
-          git pull --rebase || true
+          # ✅ 데이터, 대시보드 JSON, 차트 PNG를 모두 포함하도록 수정
+          git add data/derived/*.csv data/derived/*.json data/derived/dashboard/*.json data/derived/charts/*.png || true
+          git commit -m "Daily update (2026-02-27)" || echo "No changes"
           git push
