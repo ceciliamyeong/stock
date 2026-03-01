@@ -141,12 +141,10 @@ def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataF
     liquidity(date, market)에 investor net을 left merge.
     ratio = net / turnover_krw 추가.
 
-    안정성 목표:
-    - duplicate suffix(_x/_y)로 MergeError가 절대 나지 않게 강제
-    - investor 중복행(date, market)이 있어도 groupby로 1행 정리
-    - turnover_krw==0이면 ratio는 NA
+    목표:
+    - suffix(_x/_y) 중복으로 MergeError가 절대 나지 않게
+    - 최종 산출물에 *_x/_y 컬럼이 남지 않게(정리)
     """
-    # 방어: 입력이 None이면 그대로 반환
     if liquidity is None or liquidity.empty:
         return liquidity
 
@@ -155,27 +153,27 @@ def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataF
 
     net_cols = ["foreign_net", "institution_net", "individual_net"]
 
-    # -----------------------------
-    # HARD SAFE MERGE (suffix 원천 차단)
-    # -----------------------------
+    # 0) 혹시 liquidity에 예전 잔재 suffix 컬럼이 있으면 먼저 제거
+    liq_suffix = [c for c in liquidity.columns if c.endswith("_x") or c.endswith("_y")]
+    if liq_suffix:
+        liquidity = liquidity.drop(columns=liq_suffix)
 
-    # 1) liquidity 쪽에 net 컬럼이 있으면 제거 (investor가 source of truth)
+    # 1) liquidity에 net 컬럼이 이미 있으면 제거 (investor가 source of truth)
     liq_drop = [c for c in net_cols if c in liquidity.columns]
     if liq_drop:
         liquidity = liquidity.drop(columns=liq_drop)
 
-    # 2) investor에 이전 merge 잔재(*_net_x, *_net_y)가 있으면 제거
-    junk = [c for c in investor.columns if c.endswith("_net_x") or c.endswith("_net_y")]
-    if junk:
-        investor = investor.drop(columns=junk)
+    # 2) investor에 suffix 잔재가 있으면 제거
+    inv_suffix = [c for c in investor.columns if c.endswith("_x") or c.endswith("_y")]
+    if inv_suffix:
+        investor = investor.drop(columns=inv_suffix)
 
-    # 3) investor net 컬럼은 merge 전에 임시 이름으로 rename해서 충돌 자체를 불가능하게
+    # 3) investor net 컬럼을 임시 이름으로 rename (충돌 원천 차단)
     rename_map = {c: f"{c}__inv" for c in net_cols if c in investor.columns}
     if rename_map:
         investor = investor.rename(columns=rename_map)
 
-    # 4) date/market 단위로 1행 정리 (있을 때만)
-    #    - present_inv_cols가 비어있으면 groupby 스킵
+    # 4) date/market 단위로 1행 정리
     present_inv_cols = list(rename_map.values())
     if not investor.empty and {"date", "market"}.issubset(set(investor.columns)) and present_inv_cols:
         investor[present_inv_cols] = investor[present_inv_cols].apply(pd.to_numeric, errors="coerce")
@@ -192,9 +190,12 @@ def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataF
     if back_map:
         out = out.rename(columns=back_map)
 
-    # -----------------------------
-    # Ratios
-    # -----------------------------
+    # 7) 최종적으로 *_x/_y 컬럼은 절대 남기지 않기 (핵심)
+    drop_suffix_final = [c for c in out.columns if c.endswith("_x") or c.endswith("_y")]
+    if drop_suffix_final:
+        out = out.drop(columns=drop_suffix_final)
+
+    # 8) ratio 계산
     if "turnover_krw" in out.columns:
         denom = pd.to_numeric(out["turnover_krw"], errors="coerce").replace({0: pd.NA})
     else:
@@ -212,13 +213,7 @@ def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataF
         out["institution_net"] = pd.to_numeric(out["institution_net"], errors="coerce")
         out["institution_ratio"] = out["institution_net"] / denom
 
-    # 정렬/정리
-    sort_cols = [c for c in ["date", "market"] if c in out.columns]
-    if sort_cols:
-        out = out.sort_values(sort_cols).reset_index(drop=True)
-    else:
-        out = out.reset_index(drop=True)
-
+    out = out.sort_values(["date", "market"]).reset_index(drop=True)
     return out
 
 
