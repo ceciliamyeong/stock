@@ -396,6 +396,13 @@ def load_investor_pivot(inv: pd.DataFrame, date_str: str) -> pd.DataFrame:
 
 
 def build_market_cards(liq_day: pd.DataFrame, inv_pivot: pd.DataFrame) -> Dict[str, Any]:
+
+    # 🔥 중복 가능 컬럼 제거 (안전장치)
+    drop_cols = ["foreign_net", "institution_net", "individual_net"]
+    for c in drop_cols:
+        if c in liq_day.columns:
+            liq_day = liq_day.drop(columns=[c])
+
     merged = liq_day.merge(inv_pivot, on=["date", "market"], how="left")
 
     markets: Dict[str, Any] = {}
