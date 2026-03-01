@@ -1,13 +1,28 @@
 let dashboardData = null;
 let currentMarket = "KOSPI";
 
-fetch("../data/derived/dashboard/latest.json")
-  .then(res => res.json())
+// 🔥 GitHub Pages 하위경로 대응용 base path
+const BASE = location.pathname.split('/')[1]
+  ? `/${location.pathname.split('/')[1]}`
+  : '';
+
+fetch(`${BASE}/data/derived/dashboard/latest.json`)
+  .then(res => {
+    if (!res.ok) {
+      throw new Error("JSON load failed: " + res.status);
+    }
+    return res.json();
+  })
   .then(data => {
     dashboardData = data;
     document.getElementById("date").innerText =
       data.date + " 장마감";
     render();
+  })
+  .catch(err => {
+    console.error(err);
+    document.getElementById("date").innerText =
+      "데이터 로딩 실패";
   });
 
 function setMarket(market) {
