@@ -8,6 +8,10 @@ import pandas as pd
 
 # deps
 from pykrx import stock
+
+# IMPORTANT: headless backend for CI BEFORE importing pyplot
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import squarify
 
@@ -87,48 +91,17 @@ def signal_label(ratio: Optional[float], strong: float = 0.05, normal: float = 0
     return "WEAK"
 
 
-def _to_dash_date(s: str) -> str:
-    """'YYYYMMDD' -> 'YYYY-MM-DD'"""
-    if s and "-" not in s and len(s) == 8:
+def to_krx_date(s: str) -> str:
+    # 'YYYY-MM-DD' -> 'YYYYMMDD'
+    return str(s).replace("-", "")
+
+
+def to_dash_date(s: str) -> str:
+    # 'YYYYMMDD' -> 'YYYY-MM-DD'
+    s = str(s)
+    if "-" not in s and len(s) == 8:
         return f"{s[:4]}-{s[4:6]}-{s[6:]}"
     return s
-
-
-def normalize_trade_date(date_str: str) -> str:
-    """
-    date_str가 비영업일일 수도 있으니, pykrx 기준 '가까운 영업일'로 보정.
-    """
-    try:
-        nearest = stock.get_nearest_business_day_in_a_week(date_str)
-        return _to_dash_date(nearest)
-    except Exception:
-        # date_str를 그냥 사용(상위에서 실패 처리)
-        return date_str
-
-
-def prev_business_day(date_str: str) -> str:
-    """
-    date_str: 'YYYY-MM-DD'
-    10일 window로 영업일 리스트를 받아 직전 영업일을 반환.
-    """
-    from datetime import datetime, timedelta
-
-    date_str = normalize_trade_date(date_str)
-
-    d = datetime.strptime(date_str, "%Y-%m-%d").date()
-    start = (d - timedelta(days=10)).strftime("%Y-%m-%d")
-    end = date_str
-
-    days = stock.get_previous_business_days(fromdate=start, todate=end)
-    if not days or len(days) < 2:
-        # fallback: date_str가 비영업일이면 nearest로 다시 시도
-        nearest = normalize_trade_date(date_str)
-        if nearest != date_str:
-            return prev_business_day(nearest)
-        raise RuntimeError(f"Cannot find previous business day for {date_str}")
-
-    prev = days[-2]
-    return _to_dash_date(prev)
 
 
 def _pick_col(df: pd.DataFrame, candidates: list[str]) -> str:
@@ -138,6 +111,27 @@ def _pick_col(df: pd.DataFrame, candidates: list[str]) -> str:
     raise KeyError(f"None of candidates found in columns: {candidates} / got={df.columns.tolist()}")
 
 
+def prev_business_day(date_str: str) -> str:
+    """
+    date_str: 'YYYY-MM-DD'
+    pykrx는 영업일 유틸/조회에서 YYYYMMDD를 기대하는 경우가 많아
+    내부적으로 KRX 포맷으로 변환해서 처리.
+    """
+    from datetime import datetime, timedelta
+
+    d = datetime.strptime(date_str, "%Y-%m-%d").date()
+    start = (d - timedelta(days=14)).strftime("%Y-%m-%d")
+
+    days = stock.get_previous_business_days(
+        fromdate=to_krx_date(start),
+        todate=to_krx_date(date_str),
+    )
+    if not days or len(days) < 2:
+        raise RuntimeError(f"Cannot find previous business day for {date_str}")
+
+    return to_dash_date(days[-2])
+
+
 # ------------------------
 # pykrx extras
 # ------------------------
@@ -145,17 +139,16 @@ def _pick_col(df: pd.DataFrame, candidates: list[str]) -> str:
 def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
     """
     market: 'KOSPI' or 'KOSDAQ'
-    반환 컬럼:
+    return columns:
       ticker, name, close, mcap, return_1d
     """
-    date_str = normalize_trade_date(date_str)
     prev_str = prev_business_day(date_str)
 
-    cap = stock.get_market_cap_by_ticker(date_str, market=market)
+    cap = stock.get_market_cap_by_ticker(to_krx_date(date_str), market=market)
     if cap is None or cap.empty:
         raise RuntimeError(f"pykrx cap empty: date={date_str}, market={market}")
 
-    prev_ohlcv = stock.get_market_ohlcv_by_ticker(prev_str, market=market)
+    prev_ohlcv = stock.get_market_ohlcv_by_ticker(to_krx_date(prev_str), market=market)
     if prev_ohlcv is None or prev_ohlcv.empty:
         raise RuntimeError(f"pykrx ohlcv empty: date={prev_str}, market={market}")
 
@@ -200,14 +193,12 @@ def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path) -> None:
 
 def fetch_volatility_top5(date_str: str, market: str) -> list[dict[str, Any]]:
     """
-    변동성 top5: '당일 등락률(%) 절대값' 상위 5개.
-    반환: [{ticker, name, return_1d, close}, ...]
+    Volatility top5: 당일 등락률(%) 절대값 상위 5개.
     """
-    date_str = normalize_trade_date(date_str)
     prev_str = prev_business_day(date_str)
 
-    today = stock.get_market_ohlcv_by_ticker(date_str, market=market)
-    prev = stock.get_market_ohlcv_by_ticker(prev_str, market=market)
+    today = stock.get_market_ohlcv_by_ticker(to_krx_date(date_str), market=market)
+    prev = stock.get_market_ohlcv_by_ticker(to_krx_date(prev_str), market=market)
     if today is None or today.empty or prev is None or prev.empty:
         raise RuntimeError(f"pykrx ohlcv empty: date={date_str}/{prev_str}, market={market}")
 
@@ -230,7 +221,7 @@ def fetch_volatility_top5(date_str: str, market: str) -> list[dict[str, Any]]:
     df = df.dropna(subset=["return_1d", "abs_ret"]).sort_values("abs_ret", ascending=False).head(5)
     df["name"] = df["ticker"].map(stock.get_market_ticker_name)
 
-    out = []
+    out: list[dict[str, Any]] = []
     for _, r in df.iterrows():
         out.append(
             {
@@ -246,22 +237,11 @@ def fetch_volatility_top5(date_str: str, market: str) -> list[dict[str, Any]]:
 def fetch_breadth(date_str: str, market: str) -> dict[str, Any]:
     """
     Breadth = 상승/하락 종목 비율(ADV/DEC).
-    - 상승(adv): return_1d > 0
-    - 하락(dec): return_1d < 0
-    - 보합(unch): return_1d == 0
-    반환:
-      {
-        "date": ..., "market": ...,
-        "adv": int, "dec": int, "unch": int, "total": int,
-        "adv_ratio": float, "dec_ratio": float,
-        "adv_dec_ratio": Optional[float]
-      }
     """
-    date_str = normalize_trade_date(date_str)
     prev_str = prev_business_day(date_str)
 
-    today = stock.get_market_ohlcv_by_ticker(date_str, market=market)
-    prev = stock.get_market_ohlcv_by_ticker(prev_str, market=market)
+    today = stock.get_market_ohlcv_by_ticker(to_krx_date(date_str), market=market)
+    prev = stock.get_market_ohlcv_by_ticker(to_krx_date(prev_str), market=market)
     if today is None or today.empty or prev is None or prev.empty:
         raise RuntimeError(f"pykrx ohlcv empty: date={date_str}/{prev_str}, market={market}")
 
