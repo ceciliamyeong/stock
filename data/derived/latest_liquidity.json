@@ -3,21 +3,27 @@
   "KOSDAQ": {
     "turnover_krw": 14846572000000.0,
     "close": 1192.78,
-    "institution_net": 4460000000000.0,
-    "individual_net": null,
-    "foreign_net": null,
+    "institution_net_x": 4460000000000.0,
+    "individual_net_x": null,
+    "foreign_net_x": null,
     "individual_ratio": null,
     "foreign_ratio": null,
-    "institution_ratio": 0.30040604659445963
+    "institution_ratio": 0.3004060465944596,
+    "institution_net_y": 4460000000000.0,
+    "individual_net_y": null,
+    "foreign_net_y": null
   },
   "KOSPI": {
     "turnover_krw": 54939339000000.0,
     "close": 6244.13,
-    "institution_net": 5670000000000.0,
-    "individual_net": null,
-    "foreign_net": null,
+    "institution_net_x": 5670000000000.0,
+    "individual_net_x": null,
+    "foreign_net_x": null,
     "individual_ratio": null,
     "foreign_ratio": null,
-    "institution_ratio": 0.10320473640936961
+    "institution_ratio": 0.1032047364093696,
+    "institution_net_y": 5670000000000.0,
+    "individual_net_y": null,
+    "foreign_net_y": null
   }
 }
