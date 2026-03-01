@@ -65,18 +65,26 @@ def unit_mult(raw_hint: str) -> float:
 
 
 def norm_inv(x: str) -> str:
-    """
-    Normalize to:
-      foreign / institution / individual
-    """
     s = str(x).strip()
-    base = s.split("(")[0].strip()
-    if base == "기관" or s == "institution_total":
-        return "institution"
-    if base == "개인" or s == "individual":
-        return "individual"
-    if base == "외국인" or s == "foreign":
+
+    # 영문/내부키
+    if s in ["foreign", "foreigner", "foreign_total"]:
         return "foreign"
+    if s in ["institution", "institution_total"]:
+        return "institution"
+    if s in ["individual", "individual_total"]:
+        return "individual"
+
+    base = s.split("(")[0].strip()
+
+    # 한글 변형들(합계/계 포함)
+    if "기관" in base:
+        return "institution"
+    if "개인" in base:
+        return "individual"
+    if "외국" in base:
+        return "foreign"
+
     return s
 
 
