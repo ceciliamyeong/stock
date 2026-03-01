@@ -142,6 +142,33 @@ def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataF
     liquidity(date, market)에 investor net을 left merge.
     ratio = net / turnover_krw 추가.
     """
+    # ---- SAFE MERGE GUARD ----
+    net_cols = ["foreign_net", "institution_net", "individual_net"]
+
+    # liquidity에 net 컬럼이 있으면 제거 (investor를 source of truth로)
+    for c in net_cols:
+        if c in liquidity.columns:
+            liquidity = liquidity.drop(columns=[c])
+
+    # investor에 *_net_x/_net_y 같은 잔재가 있으면 제거
+    drop_junk = [c for c in investor.columns if c.endswith("_net_x") or c.endswith("_net_y")]
+    if drop_junk:
+        investor = investor.drop(columns=drop_junk)
+
+    # investor가 비어있지 않으면 (date/market 단위로 1행 정리)
+    if investor is not None and not investor.empty:
+        # 존재하는 net 컬럼만 사용 (KeyError 방지)
+        present_net_cols = [c for c in net_cols if c in investor.columns]
+
+        # 혹시 net 컬럼이 하나도 없으면 merge만 하고 ratio는 스킵되도록
+        if present_net_cols:
+            investor[present_net_cols] = investor[present_net_cols].apply(pd.to_numeric, errors="coerce")
+            investor = (
+                investor.groupby(["date", "market"], as_index=False)[present_net_cols]
+                .sum(min_count=1)
+            )
+
+    # merge
     out = liquidity.merge(investor, on=["date", "market"], how="left")
 
     denom = out["turnover_krw"].replace({0: pd.NA})
@@ -155,7 +182,6 @@ def _merge_investor(liquidity: pd.DataFrame, investor: pd.DataFrame) -> pd.DataF
 
     out = out.sort_values(["date", "market"]).reset_index(drop=True)
     return out
-
 
 def _save_liquidity(df: pd.DataFrame):
     df.to_csv(LIQUIDITY_CSV, index=False)
