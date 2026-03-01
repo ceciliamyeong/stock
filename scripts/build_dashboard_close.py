@@ -1,3 +1,6 @@
+print("RUNNING FILE:", __file__)
+print("VERSION: merge-removed-2026-03-01")
+
 from __future__ import annotations
 
 import json
@@ -378,26 +381,19 @@ def load_investor_pivot(inv: pd.DataFrame, date_str: str) -> pd.DataFrame:
 
     return pivot.sort_values(["market"]).reset_index(drop=True)
 
-
 def build_market_cards(liq_day: pd.DataFrame, inv_pivot: pd.DataFrame) -> Dict[str, Any]:
-    """
-    NOTE: merge()를 쓰지 않는다. (_x/_y 중복 및 MergeError 원천 차단)
-    """
     inv_map: Dict[str, dict] = {}
     if inv_pivot is not None and not inv_pivot.empty:
-        for _, r in inv_pivot.iterrows():
-            inv_map[str(r["market"])] = r.to_dict()
+        for _, rr in inv_pivot.iterrows():
+            inv_map[str(rr["market"])] = rr.to_dict()
 
     markets: Dict[str, Any] = {}
-
     for _, r in liq_day.iterrows():
         mk = str(r["market"])
-
         turnover = None if pd.isna(r.get("turnover_krw")) else float(r.get("turnover_krw"))
         close = None if pd.isna(r.get("close")) else float(r.get("close"))
 
         inv_row = inv_map.get(mk, {})
-
         foreign = inv_row.get("foreign_net")
         inst = inv_row.get("institution_net")
         indiv = inv_row.get("individual_net")
@@ -411,21 +407,13 @@ def build_market_cards(liq_day: pd.DataFrame, inv_pivot: pd.DataFrame) -> Dict[s
                 return None
             return float(v) / float(turnover)
 
-        ratios = {
-            "foreign": ratio(foreign),
-            "institution": ratio(inst),
-            "individual": ratio(indiv),
-        }
+        ratios = {"foreign": ratio(foreign), "institution": ratio(inst), "individual": ratio(indiv)}
 
         markets[mk] = {
             "close": close,
             "turnover_krw": turnover,
             "turnover_readable": krw_readable(turnover),
-            "investor_net_krw": {
-                "foreign": foreign,
-                "institution": inst,
-                "individual": indiv,
-            },
+            "investor_net_krw": {"foreign": foreign, "institution": inst, "individual": indiv},
             "investor_net_readable": {
                 "foreign": krw_readable(foreign),
                 "institution": krw_readable(inst),
@@ -438,8 +426,8 @@ def build_market_cards(liq_day: pd.DataFrame, inv_pivot: pd.DataFrame) -> Dict[s
                 "individual": signal_label(ratios["individual"]),
             },
         }
-
     return markets
+
 
 
 # ------------------------
