@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 print("RUNNING FILE:", __file__)
-print("VERSION: run_daily-final-safe-indexname-2026-03-01")
+print("VERSION: run_daily-no-index-api-2026-03-01")
 
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import pandas as pd
 from pykrx import stock
@@ -25,11 +25,7 @@ FORCE_CLOSE_DATE = "2026-02-27"
 # ✅ 거래소 수급 단위: (십억원)
 RAW_UNIT_HINT = "(십억원)"
 
-# ✅ index code는 우리가 이미 알고 있으니 이름 조회(pykrx) 하지 말자
-INDEX_MAP = {
-    "KOSPI": {"code": "1001", "name": "KOSPI"},
-    "KOSDAQ": {"code": "2001", "name": "KOSDAQ"},
-}
+MARKETS = ["KOSPI", "KOSDAQ"]
 
 
 def ensure_dirs():
@@ -46,13 +42,6 @@ def to_dash_date(s: str) -> str:
     if "-" not in s and len(s) == 8:
         return f"{s[:4]}-{s[4:6]}-{s[6:]}"
     return s
-
-
-def _pick_col(df: pd.DataFrame, candidates: List[str]) -> str:
-    for c in candidates:
-        if c in df.columns:
-            return c
-    raise KeyError(f"None of candidates found: {candidates} / got={df.columns.tolist()}")
 
 
 def latest_business_day() -> str:
@@ -122,67 +111,56 @@ def _norm_inv(t: str) -> str:
 
 
 # ------------------------
-# Liquidity (KOSPI/KOSDAQ index)
+# Liquidity: read from history CSV only (NO pykrx index API)
 # ------------------------
 
-def _fetch_market_index_liquidity(date_str: str) -> pd.DataFrame:
-    rows = []
-
-    for mk, info in INDEX_MAP.items():
-        code = info["code"]
-
-        df = stock.get_index_ohlcv_by_date(to_krx_date(date_str), to_krx_date(date_str), code)
-        if df is None or df.empty:
-            raise RuntimeError(f"index ohlcv empty: market={mk}, code={code}, date={date_str}")
-
-        close_col = _pick_col(df, ["종가", "Close"])
-
-        value_col = None
-        for cand in ["거래대금", "거래대금(원)", "거래대금(억원)", "Trading Value"]:
-            if cand in df.columns:
-                value_col = cand
-                break
-        if value_col is None:
-            raise KeyError(f"Cannot find trading value column. cols={df.columns.tolist()}")
-
-        close = float(pd.to_numeric(df.iloc[-1][close_col], errors="coerce"))
-        tv_raw = pd.to_numeric(df.iloc[-1][value_col], errors="coerce")
-
-        # 거래대금(억원)면 원화 환산
-        turnover_krw = float(tv_raw) * 1e8 if "(억원)" in str(value_col) else float(tv_raw)
-
-        rows.append({"date": date_str, "market": mk, "turnover_krw": turnover_krw, "close": close})
-
-    return pd.DataFrame(rows)
-
-
 def _load_liquidity_history() -> pd.DataFrame:
+    cols = ["date", "market", "turnover_krw", "close"]
     if not HIST_LIQ.exists():
-        return pd.DataFrame(columns=["date", "market", "turnover_krw", "close"])
+        return pd.DataFrame(columns=cols)
+
     df = pd.read_csv(HIST_LIQ)
     if df.empty:
-        return pd.DataFrame(columns=["date", "market", "turnover_krw", "close"])
+        return pd.DataFrame(columns=cols)
+
+    if "date" not in df.columns or "market" not in df.columns:
+        return pd.DataFrame(columns=cols)
 
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date.astype(str)
     df["market"] = df["market"].astype(str)
     df["turnover_krw"] = pd.to_numeric(df.get("turnover_krw"), errors="coerce")
     df["close"] = pd.to_numeric(df.get("close"), errors="coerce")
+
     df = df.dropna(subset=["date", "market"])
     return df.sort_values(["date", "market"]).reset_index(drop=True)
 
 
-def _upsert_liquidity(date_str: str) -> pd.DataFrame:
+def _liquidity_day_from_history(date_str: str) -> pd.DataFrame:
+    """
+    ✅ index API 호출 금지.
+    liquidity_daily.csv에서 해당 date의 KOSPI/KOSDAQ rows를 꺼낸다.
+    없으면 NaN row라도 만들어서 파이프라인을 살린다.
+    """
     hist = _load_liquidity_history()
-    today_df = _fetch_market_index_liquidity(date_str)
+    day = hist[hist["date"] == date_str].copy()
 
-    if not hist.empty:
-        hist = hist[hist["date"] != date_str].copy()
+    rows = []
+    for mk in MARKETS:
+        sub = day[day["market"] == mk]
+        if not sub.empty:
+            r = sub.iloc[-1].to_dict()
+            rows.append({
+                "date": date_str,
+                "market": mk,
+                "turnover_krw": r.get("turnover_krw"),
+                "close": r.get("close"),
+            })
+        else:
+            rows.append({"date": date_str, "market": mk, "turnover_krw": pd.NA, "close": pd.NA})
 
-    out = pd.concat([hist, today_df], ignore_index=True)
-    out = out.sort_values(["date", "market"]).reset_index(drop=True)
-    out.to_csv(HIST_LIQ, index=False)
-
-    print("Saved liquidity:", HIST_LIQ, "rows=", len(out))
+    out = pd.DataFrame(rows)
+    out["turnover_krw"] = pd.to_numeric(out["turnover_krw"], errors="coerce")
+    out["close"] = pd.to_numeric(out["close"], errors="coerce")
     return out
 
 
@@ -190,10 +168,17 @@ def _upsert_liquidity(date_str: str) -> pd.DataFrame:
 # Investor long-form (market level)
 # ------------------------
 
+def _pick_col(df: pd.DataFrame, candidates: List[str]) -> str:
+    for c in candidates:
+        if c in df.columns:
+            return c
+    raise KeyError(f"None of candidates found: {candidates} / got={df.columns.tolist()}")
+
+
 def _fetch_investor_long(date_str: str) -> pd.DataFrame:
     rows = []
 
-    for mk in ["KOSPI", "KOSDAQ"]:
+    for mk in MARKETS:
         df = stock.get_market_trading_value_by_investor(to_krx_date(date_str), market=mk)
         if df is None or df.empty:
             raise RuntimeError(f"investor trading value empty: date={date_str}, market={mk}")
@@ -296,9 +281,9 @@ def _read_investor_pivot_from_long(inv_long: pd.DataFrame) -> pd.DataFrame:
     return pivot[["date", "market", "foreign_net", "institution_net", "individual_net"]]
 
 
-def _merge_investor(liquidity: pd.DataFrame, investor_pivot: pd.DataFrame) -> pd.DataFrame:
-    if liquidity is None or liquidity.empty:
-        return liquidity
+def _merge_investor(liquidity_day: pd.DataFrame, investor_pivot: pd.DataFrame) -> pd.DataFrame:
+    if liquidity_day is None or liquidity_day.empty:
+        return liquidity_day
 
     if investor_pivot is None:
         investor_pivot = pd.DataFrame(columns=["date", "market", "foreign_net", "institution_net", "individual_net"])
@@ -306,23 +291,20 @@ def _merge_investor(liquidity: pd.DataFrame, investor_pivot: pd.DataFrame) -> pd
     net_cols = ["foreign_net", "institution_net", "individual_net"]
 
     # suffix 잔재 제거
-    for df in [liquidity, investor_pivot]:
-        pass
-
-    liq_suffix = [c for c in liquidity.columns if c.endswith("_x") or c.endswith("_y")]
+    liq_suffix = [c for c in liquidity_day.columns if c.endswith("_x") or c.endswith("_y")]
     if liq_suffix:
-        liquidity = liquidity.drop(columns=liq_suffix)
+        liquidity_day = liquidity_day.drop(columns=liq_suffix)
 
     inv_suffix = [c for c in investor_pivot.columns if c.endswith("_x") or c.endswith("_y")]
     if inv_suffix:
         investor_pivot = investor_pivot.drop(columns=inv_suffix)
 
-    # liquidity 쪽 기존 net 제거
-    liq_drop = [c for c in net_cols if c in liquidity.columns]
+    # liquidity쪽 net 제거
+    liq_drop = [c for c in net_cols if c in liquidity_day.columns]
     if liq_drop:
-        liquidity = liquidity.drop(columns=liq_drop)
+        liquidity_day = liquidity_day.drop(columns=liq_drop)
 
-    # investor net은 임시 이름으로 바꿔서 충돌 원천 차단
+    # investor net 임시 rename
     rename_map = {c: f"{c}__inv" for c in net_cols if c in investor_pivot.columns}
     if rename_map:
         investor_pivot = investor_pivot.rename(columns=rename_map)
@@ -332,21 +314,19 @@ def _merge_investor(liquidity: pd.DataFrame, investor_pivot: pd.DataFrame) -> pd
         investor_pivot[present] = investor_pivot[present].apply(pd.to_numeric, errors="coerce")
         investor_pivot = investor_pivot.groupby(["date", "market"], as_index=False)[present].sum(min_count=1)
 
-    out = liquidity.merge(investor_pivot, on=["date", "market"], how="left")
+    out = liquidity_day.merge(investor_pivot, on=["date", "market"], how="left")
 
-    # 컬럼명 복원
     back_map = {v: k for k, v in rename_map.items()}
     if back_map:
         out = out.rename(columns=back_map)
 
-    # 최종 suffix 제거
     drop_suffix_final = [c for c in out.columns if c.endswith("_x") or c.endswith("_y")]
     if drop_suffix_final:
         out = out.drop(columns=drop_suffix_final)
 
     denom = pd.to_numeric(out.get("turnover_krw", pd.Series([pd.NA] * len(out))), errors="coerce").replace({0: pd.NA})
 
-    for c in ["individual_net", "foreign_net", "institution_net"]:
+    for c in net_cols:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors="coerce")
 
@@ -368,21 +348,23 @@ def main():
 
     print("Target date:", date_str, "(prev:", (prev if prev else "N/A"), ")")
     print("Investor unit:", RAW_UNIT_HINT)
+    print("Liquidity source:", HIST_LIQ, "(NO pykrx index api)")
 
-    liq_hist = _upsert_liquidity(date_str)
+    # ✅ liquidity는 history에서만 읽어온다
+    liq_day = _liquidity_day_from_history(date_str)
+
     inv_long_hist = _upsert_investor_long(date_str)
 
     inv_pivot = _read_investor_pivot_from_long(inv_long_hist)
     inv_pivot.to_csv(INVESTOR_PIVOT_CSV, index=False)
     print("Saved investor pivot:", INVESTOR_PIVOT_CSV, "rows=", len(inv_pivot))
 
-    merged = _merge_investor(liq_hist, inv_pivot)
+    merged = _merge_investor(liq_day, inv_pivot)
     merged.to_csv(MERGED_CSV, index=False)
     print("Saved merged market flow:", MERGED_CSV, "rows=", len(merged))
 
-    latest_snapshot = {"date": date_str, "markets": {}}
-    latest_rows = merged[merged["date"] == date_str].copy()
-    for _, r in latest_rows.iterrows():
+    latest_snapshot: Dict[str, Any] = {"date": date_str, "markets": {}}
+    for _, r in merged.iterrows():
         mk = str(r["market"])
         latest_snapshot["markets"][mk] = {
             "turnover_krw": None if pd.isna(r.get("turnover_krw")) else float(r.get("turnover_krw")),
