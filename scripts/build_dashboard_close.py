@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional, List
 
 import pandas as pd
 
+
+import requests
 from pykrx import stock
 
 # headless backend for CI
@@ -34,6 +36,85 @@ OUT_CHART = ROOT / "data" / "derived" / "charts"
 # ✅ 최종 마감일 강제 (None이면 자동)
 FORCE_CLOSE_DATE = "2026-02-27"
 
+
+
+# ------------------------
+# KRX 12001 (전종목시세) fallback for Top10 treemap
+# ------------------------
+
+KRX_URL = "https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
+
+def _krx_post_json(payload: Dict[str, str]) -> Dict[str, Any]:
+    """POST to KRX getJsonData.cmd and return JSON."""
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://data.krx.co.kr/",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    }
+    r = requests.post(KRX_URL, data=payload, headers=headers, timeout=60)
+    r.raise_for_status()
+    return r.json()
+
+def fetch_topN_from_krx_12001(date_str: str, market: str, n: int = 10) -> pd.DataFrame:
+    """
+    Build TopN by market cap using KRX 12001 (전종목시세) endpoint.
+
+    market: 'KOSPI' -> mktId=STK, 'KOSDAQ' -> mktId=KSQ
+    Returns columns: ticker, name, close, mcap, return_1d
+    """
+    mktId = "STK" if market == "KOSPI" else "KSQ"
+
+    payload = {
+        "bld": "dbms/MDC/STAT/standard/MDCSTAT01501",
+        "locale": "ko_KR",
+        "mktId": mktId,
+        "segTpCd": "ALL",
+        "trdDd": date_str.replace("-", ""),
+        "share": "1",
+        "money": "1",
+        "csvxls_isNo": "false",
+    }
+
+    j = _krx_post_json(payload)
+
+    # Find the first list-like block in response (keys often like 'OutBlock_1')
+    rows = None
+    for k, v in j.items():
+        if isinstance(v, list) and len(v) > 0:
+            rows = v
+            break
+    if rows is None:
+        raise RuntimeError(f"KRX response has no rows. keys={list(j.keys())}")
+
+    df = pd.DataFrame(rows)
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Column pick (KRX usually provides these)
+    code_col = next(c for c in df.columns if "종목코드" in c)
+    name_col = next(c for c in df.columns if "종목명" in c)
+    close_col = next(c for c in df.columns if "종가" in c)
+    mcap_col = next(c for c in df.columns if "시가총액" in c)
+    ret_col = next((c for c in df.columns if "등락률" in c), None)
+
+    def to_num(series: pd.Series) -> pd.Series:
+        return pd.to_numeric(
+            series.astype(str)
+                  .str.replace(",", "", regex=False)
+                  .str.replace("%", "", regex=False),
+            errors="coerce",
+        )
+
+    out = df[[code_col, name_col, close_col, mcap_col] + ([ret_col] if ret_col else [])].copy()
+    out["ticker"] = out[code_col].astype(str).str.strip()
+    out["name"] = out[name_col].astype(str).str.strip()
+    out["close"] = to_num(out[close_col])
+    out["mcap"] = to_num(out[mcap_col])
+    out["return_1d"] = to_num(out[ret_col]) if ret_col else pd.NA
+
+    out = out.dropna(subset=["mcap"]).copy()
+    out = out[out["mcap"] > 0]
+    out = out.sort_values("mcap", ascending=False).head(n).reset_index(drop=True)
+    return out[["ticker", "name", "close", "mcap", "return_1d"]]
 
 # ------------------------
 # Utils
@@ -72,53 +153,11 @@ def to_dash_date(s: str) -> str:
 
 
 def _pick_col(df: pd.DataFrame, candidates: List[str]) -> str:
-    """
-    Robust column picker for pykrx DataFrames.
-
-    - Tries exact match first.
-    - Then tries fuzzy 'contains' match (case/space-insensitive).
-    - Finally, falls back to a numeric-looking column (if available) to avoid hard crash.
-      (We still raise if df is empty.)
-    """
-    if df is None or df.empty:
-        raise KeyError("Empty DataFrame: cannot pick a column")
-
-    cols = list(df.columns)
-
-    # 1) exact match
     for c in candidates:
-        if c in cols:
+        if c in df.columns:
             return c
+    raise KeyError(f"None of candidates found: {candidates} / got={df.columns.tolist()}")
 
-    # 2) fuzzy contains match (normalize strings)
-    def norm(x: object) -> str:
-        return str(x).strip().replace(" ", "").lower()
-
-    norm_cols = [(c, norm(c)) for c in cols]
-    norm_cands = [norm(c) for c in candidates]
-
-    for cand in norm_cands:
-        for c, nc in norm_cols:
-            if cand and cand in nc:
-                return c
-
-    # 3) heuristic fallback: pick a numeric-looking column (excluding obvious non-metrics)
-    try:
-        bad_tokens = ["종목", "ticker", "name", "isin", "code"]
-        numeric_cols = []
-        for c in cols:
-            if any(t in norm(c) for t in bad_tokens):
-                continue
-            # try converting; if most values are numeric, consider it
-            s = pd.to_numeric(df[c], errors="coerce")
-            if s.notna().mean() > 0.6:
-                numeric_cols.append(c)
-        if numeric_cols:
-            return numeric_cols[0]
-    except Exception:
-        pass
-
-    raise KeyError(f"Column not found. candidates={candidates} / got={cols}")
 
 def signal_label(ratio: Optional[float], strong: float = 0.05, normal: float = 0.02) -> Optional[str]:
     if ratio is None:
@@ -186,12 +225,6 @@ def prev_business_day(date_str: str) -> str:
 # ------------------------
 
 def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
-    """
-    Top10 by market cap + 1D return.
-
-    NOTE: pykrx column labels can vary by version/locale.
-    This function uses robust column picking to survive those differences.
-    """
     prev_str = prev_business_day(date_str)
 
     cap = stock.get_market_cap_by_ticker(to_krx_date(date_str), market=market)
@@ -202,14 +235,9 @@ def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
     if prev_ohlcv is None or prev_ohlcv.empty:
         raise RuntimeError(f"pykrx ohlcv empty: date={prev_str}, market={market}")
 
-    # Helpful debug in CI logs (kept lightweight)
-    print(f"[Top10 Debug] {market} cap.columns = {list(cap.columns)}")
-    print(f"[Top10 Debug] {market} prev_ohlcv.columns = {list(prev_ohlcv.columns)}")
-
-    # Wider candidate lists (KR/EN + common variants)
-    close_col = _pick_col(cap, ["종가", "현재가", "Close", "close", "Last", "last"])
-    mcap_col = _pick_col(cap, ["시가총액", "시총", "Market Cap", "marketcap", "MarketCap", "mcap"])
-    prev_close_col = _pick_col(prev_ohlcv, ["종가", "현재가", "Close", "close", "Last", "last"])
+    close_col = _pick_col(cap, ["종가", "Close"])
+    mcap_col = _pick_col(cap, ["시가총액", "Market Cap"])
+    prev_close_col = _pick_col(prev_ohlcv, ["종가", "Close"])
 
     df = cap[[close_col, mcap_col]].copy()
     df = df.rename(columns={close_col: "close", mcap_col: "mcap"})
@@ -226,13 +254,9 @@ def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
     df["mcap"] = pd.to_numeric(df["mcap"], errors="coerce")
 
     df["return_1d"] = (df["close"] / df["prev_close"] - 1.0) * 100.0
-
-    # Clean: mcap must be positive number for treemap sizing
-    df = df.dropna(subset=["mcap"]).copy()
-    df = df[df["mcap"] > 0]
-
-    df = df.sort_values("mcap", ascending=False).head(10).reset_index(drop=True)
+    df = df.dropna(subset=["mcap"]).sort_values("mcap", ascending=False).head(10).reset_index(drop=True)
     return df[["ticker", "name", "close", "mcap", "return_1d"]]
+
 
 def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path) -> None:
     outpath.parent.mkdir(parents=True, exist_ok=True)
@@ -500,15 +524,17 @@ def main():
         },
     }
 
-    # Top10 treemap + data (실패해도 latest.json 생성)
+    # Top10 treemap + data (KRX 12001 기반, 실패해도 latest.json 생성)
     try:
+        TOP_N = 10
         for mk in ["KOSPI", "KOSDAQ"]:
-            df_top10 = fetch_top10_mcap_and_return(date_str, mk)
-            dashboard["extras"]["top10_treemap"][mk] = df_top10.to_dict(orient="records")
+            df_top = fetch_topN_from_krx_12001(date_str, mk, n=TOP_N)
+            # 프론트 호환을 위해 key/파일명은 top10 그대로 유지
+            dashboard["extras"]["top10_treemap"][mk] = df_top.to_dict(orient="records")
 
             make_treemap_png(
-                df_top10,
-                f"{mk} 시총 TOP10 — {date_str}",
+                df_top,
+                f"{mk} 시총 TOP{TOP_N} — {date_str}",
                 OUT_CHART / f"treemap_{mk.lower()}_top10_latest.png",
             )
     except Exception as e:
