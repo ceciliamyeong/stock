@@ -53,11 +53,17 @@ def _pick_col_safe(df: pd.DataFrame, candidates: List[str]) -> str:
 
 def _call_trading_value_by_investor(date_str: str, mk: str) -> pd.DataFrame:
     d = to_krx_date(date_str)
-    # 현재 환경의 pykrx 버전 요구사항 (시작일, 종료일, 시장)
     try:
+        # 1차 시도 (기존)
+        return stock.get_market_trading_value_by_investor(fromdate=d, todate=d, market=mk)
+    except Exception as e1:
+        print(f"❌ pykrx call failed(1): {e1}")
+
+    try:
+        # 2차 시도: 일부 버전/환경에서 시그니처/파서가 다른 경우가 있어서 폴백
         return stock.get_market_trading_value_by_investor(d, d, mk)
-    except Exception as e:
-        print(f"❌ pykrx call failed: {e}")
+    except Exception as e2:
+        print(f"❌ pykrx call failed(2): {e2}")
         return pd.DataFrame()
 
 def _fetch_investor_long(date_str: str) -> pd.DataFrame:
