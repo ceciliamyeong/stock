@@ -80,6 +80,7 @@ def plot_investor_net_and_ratio(
         return None
 
     d = _apply_window(d, window_days)
+    
     if len(d) == 0:
         return None
 
@@ -199,11 +200,11 @@ def main():
             plt.close(fig_all)
 
         # 2) Investor net + ratio (if available)
-        fig_inv_1y = plot_investor_net_and_ratio(d, market, window_days=365)
-        if fig_inv_1y is not None:
-            p = OUT_DIR / f"{market.lower()}_investor_net_ratio_1y.png"
-            fig_inv_1y.savefig(p, dpi=160)
-            plt.close(fig_inv_1y)
+        fig_inv_60d = plot_investor_net_and_ratio(d, market, window_days=60, z_window=60)
+        if fig_inv_60d is not None:
+            p = OUT_DIR / f"{market.lower()}_investor_net_overheat_60d.png"
+            fig_inv_60d.savefig(p, dpi=160)
+            plt.close(fig_inv_60d)
 
         fig_inv_all = plot_investor_net_and_ratio(d, market, window_days=None)
         if fig_inv_all is not None:
