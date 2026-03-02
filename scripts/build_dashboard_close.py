@@ -59,7 +59,8 @@ def fetch_top10_from_naver(market: str) -> pd.DataFrame:
         raise RuntimeError("Naver parse failed: no table matched '종목명'")
 
     df = tables[0].copy()
-   
+    df = df.dropna(subset=["종목명"]).copy()
+    
     def to_num(x):
         s = str(x).replace(",", "").strip()
         s = re.sub(r"[^\d\.\-]", "", s)
@@ -267,7 +268,8 @@ def fetch_upjong_top_bottom3_from_naver() -> Dict[str, List[Dict[str, Any]]]:
         raise RuntimeError("Naver upjong parse failed: no table matched '업종명'")
 
     df = tables[0].copy()
-   if isinstance(df.columns, pd.MultiIndex):
+    
+    if isinstance(df.columns, pd.MultiIndex):
         df.columns = [
             (str(a).strip() if "Unnamed" not in str(a) else str(b).strip())
             if (str(b).strip() == "" or "Unnamed" in str(b))
@@ -683,7 +685,7 @@ def main():
     }
 
 
-        # Upjong (업종 상/하위)
+    # Upjong (업종 상/하위)
     try:
         dashboard["extras"]["upjong"] = fetch_upjong_top_bottom3_from_naver()
     except Exception as e:
