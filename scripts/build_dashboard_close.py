@@ -243,99 +243,57 @@ def prev_business_day(date_str: str) -> str:
         return (d - timedelta(days=1 if d.weekday() != 0 else 3)).strftime("%Y-%m-%d")
 
 
-def fetch_upjong_top_bottom(top_n: int = 3) -> Dict[str, List[Dict[str, Any]]]:
+def fetch_upjong_top_bottom3_from_naver() -> Dict[str, List[Dict[str, Any]]]:
     """
-    네이버 금융 업종별 시세에서 업종 등락률 상위/하위 N개를 가져옵니다.
-    반환:
-      {
-        "top": [{"name":..., "return_1d":..., "close":..., "turnover":...}, ...],
-        "bottom": [...]
-      }
+    네이버 업종별 시세에서 업종 등락률 상위/하위 3개를 가져온다.
+    return: {"top": [{"name":..., "return_pct":...}, ...], "bottom": [...]}
     """
+    import pandas as pd
+    import re
     from io import StringIO
 
-    # ✅ 네이버 업종 페이지(테이블) - 혹시 페이지 구조 바뀌면 여기만 바꾸면 됨
-    urls = [
-        "https://finance.naver.com/sise/sise_group.naver?type=upjong",     # 업종별
-        "https://finance.naver.com/sise/sise_group.naver?type=upjong&no=1" # 일부 환경에서 필요할 수 있어 예비
-    ]
-
+    url = "https://finance.naver.com/sise/sise_group.naver?type=upjong"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Referer": "https://finance.naver.com/",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
     }
 
-    last_err = None
-    df = None
+    r = requests.get(url, headers=headers, timeout=20)
+    r.raise_for_status()
+    r.encoding = "euc-kr"  # ✅ 한글 깨짐 방지
 
-    for url in urls:
-        try:
-            r = requests.get(url, headers=headers, timeout=20)
-            r.raise_for_status()
-            r.encoding = "euc-kr"  # ✅ 한글 깨짐 방지(핵심)
-            tables = pd.read_html(StringIO(r.text))
-            # 업종 테이블은 보통 '업종명' 컬럼이 있음
-            for t in tables:
-                if any("업종" in str(c) for c in t.columns) and any("등락" in str(c) for c in t.columns):
-                    df = t.copy()
-                    break
-            if df is not None:
-                break
-        except Exception as e:
-            last_err = e
+    tables = pd.read_html(StringIO(r.text), match="업종명")
+    if not tables:
+        raise RuntimeError("Naver upjong parse failed: no table matched '업종명'")
 
-    if df is None or df.empty:
-        raise RuntimeError(f"Upjong parse failed: {last_err}")
+    df = tables[0].copy()
+    df = df.dropna(subset=["업종명"]).copy()
 
-    # 컬럼 찾기(유연하게)
-    name_col = next((c for c in df.columns if "업종" in str(c)), None)          # 업종명
-    ret_col  = next((c for c in df.columns if "등락률" in str(c) or "등락" in str(c)), None)  # 등락률
-    close_col = next((c for c in df.columns if "현재가" in str(c) or "지수" in str(c) or "현재" in str(c)), None)
-    turnover_col = next((c for c in df.columns if "거래대금" in str(c)), None)
+    # 등락률 컬럼 찾기(보통 '전일대비')
+    ret_col = None
+    for c in df.columns:
+        if "전일대비" in str(c) or "등락률" in str(c):
+            ret_col = c
+            break
+    if ret_col is None:
+        raise RuntimeError(f"Naver upjong table missing return col. columns={list(df.columns)}")
 
-    if name_col is None or ret_col is None:
-        raise RuntimeError(f"Upjong table missing cols. columns={list(df.columns)}")
-
-    # 숫자 변환
-    def to_num(x):
-        s = str(x).replace(",", "").strip()
-        s = re.sub(r"[^\d\.\-]", "", s)
+    def to_pct(x):
+        s = str(x).strip().replace("%", "")
+        s = re.sub(r"[^\d\.\-\+]", "", s)
         return pd.to_numeric(s, errors="coerce")
 
-    out = pd.DataFrame()
-    out["name"] = df[name_col].astype(str).str.strip()
-    out["return_1d"] = df[ret_col].map(to_num)
+    df["return_pct"] = df[ret_col].map(to_pct)
+    df = df.dropna(subset=["return_pct"]).copy()
 
-    if close_col is not None:
-        out["close"] = df[close_col].map(to_num)
-    else:
-        out["close"] = pd.NA
+    top = df.sort_values("return_pct", ascending=False).head(3)
+    bottom = df.sort_values("return_pct", ascending=True).head(3)
 
-    if turnover_col is not None:
-        out["turnover"] = df[turnover_col].map(to_num)
-    else:
-        out["turnover"] = pd.NA
+    def pack(dd):
+        return [{"name": str(r["업종명"]), "return_pct": float(r["return_pct"])} for _, r in dd.iterrows()]
 
-    out = out.dropna(subset=["name", "return_1d"])
-    out = out[~out["name"].isin(["nan", "NaN", "None", ""])]
-    out = out.reset_index(drop=True)
-
-    top_df = out.sort_values("return_1d", ascending=False).head(top_n)
-    bot_df = out.sort_values("return_1d", ascending=True).head(top_n)
-
-    def pack(dff: pd.DataFrame) -> List[Dict[str, Any]]:
-        return [
-            {
-                "name": str(r["name"]),
-                "return_1d": float(r["return_1d"]) if pd.notna(r["return_1d"]) else None,
-                "close": float(r["close"]) if pd.notna(r["close"]) else None,
-                "turnover": float(r["turnover"]) if pd.notna(r["turnover"]) else None,
-            }
-            for _, r in dff.iterrows()
-        ]
-
-    return {"top": pack(top_df), "bottom": pack(bot_df)}
+    return {"top": pack(top), "bottom": pack(bottom)}
 
 # ------------------------
 # Extras: Top10 / Vol / Breadth
@@ -705,13 +663,14 @@ def main():
             },
             "volatility_top5": {"KOSPI": [], "KOSDAQ": []},
             "breadth": {"KOSPI": {}, "KOSDAQ": {}},
+            "upjong": {"top": [], "bottom": []}, 
         },
     }
 
 
         # Upjong (업종 상/하위)
     try:
-        dashboard["extras"]["upjong"] = fetch_upjong_top_bottom(top_n=3)
+        dashboard["extras"]["upjong"] = fetch_upjong_top_bottom3_from_naver()
     except Exception as e:
         dashboard["extras"]["upjong"] = {"top": [], "bottom": []}
         dashboard["extras"]["upjong_error"] = str(e)
