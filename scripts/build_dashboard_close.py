@@ -59,8 +59,7 @@ def fetch_top10_from_naver(market: str) -> pd.DataFrame:
         raise RuntimeError("Naver parse failed: no table matched '종목명'")
 
     df = tables[0].copy()
-    df = df.dropna(subset=["종목명"]).copy()
-
+   
     def to_num(x):
         s = str(x).replace(",", "").strip()
         s = re.sub(r"[^\d\.\-]", "", s)
@@ -263,12 +262,28 @@ def fetch_upjong_top_bottom3_from_naver() -> Dict[str, List[Dict[str, Any]]]:
     r.raise_for_status()
     r.encoding = "euc-kr"  # ✅ 한글 깨짐 방지
 
-    tables = pd.read_html(StringIO(r.text), match="업종명")
+    tables = pd.read_html(StringIO(r.text))
     if not tables:
         raise RuntimeError("Naver upjong parse failed: no table matched '업종명'")
 
     df = tables[0].copy()
-    df = df.dropna(subset=["업종명"]).copy()
+   if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [
+            (str(a).strip() if "Unnamed" not in str(a) else str(b).strip())
+            if (str(b).strip() == "" or "Unnamed" in str(b))
+            else str(b).strip()
+            for a, b in df.columns.to_list()
+        ]
+    else:
+        df.columns = [str(c).strip() for c in df.columns]
+    
+    # ✅ 업종명 컬럼 자동 탐색 후 dropna
+    name_col = next((c for c in df.columns if "업종" in str(c)), None)
+    if name_col is None:
+        raise RuntimeError(f"Naver upjong: name col not found. columns={list(df.columns)}")
+    
+    df = df.dropna(subset=[name_col]).copy()
+    df.rename(columns={name_col: "업종명"}, inplace=True)
 
     # 등락률 컬럼 찾기(보통 '전일대비')
     ret_col = None
@@ -731,3 +746,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
