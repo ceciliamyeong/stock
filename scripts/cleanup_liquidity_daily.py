@@ -23,9 +23,9 @@ def main():
     df = df[cols].copy()
 
     # 3) 정렬/중복 제거
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    df = df.dropna(subset=["date","market"])
-    df = df.sort_values(["date","market"]).drop_duplicates(["date","market"], keep="last")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"])
+    df["date"] = df["date"].dt.strftime("%Y-%m-%d")
 
     df.to_csv(P, index=False)
     print("Cleaned:", P, "cols=", list(df.columns), "rows=", len(df))
