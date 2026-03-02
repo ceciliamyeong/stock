@@ -64,10 +64,16 @@ def plot_close_vs_turnover(d: pd.DataFrame, market: str, window_days: int | None
     return fig
 
 
-def plot_investor_net_and_ratio(d: pd.DataFrame, market: str, window_days: int | None = 365):
+def plot_investor_net_and_ratio(
+    d: pd.DataFrame,
+    market: str,
+    window_days: int | None = 60,   # <- 추천: 기본 60
+    z_window: int = 60,             # 통계 창
+    use_institution_bars: bool = False,  # 기관 막대는 기본 끄기
+):
     """
-    Net flow (bars, left axis): individual_net / foreign_net / institution_net (KRW)
-    Ratio (lines, right axis): individual_ratio / foreign_ratio / institution_ratio (= net / turnover)
+    Top panel: Net flow (bars) — Individual + Foreign (optionally Institution)
+    Bottom panel: Foreign ratio z-score (rolling z-window) with +/-2 overheat shading
     """
     need_any = ["individual_net", "foreign_net", "institution_net"]
     if not any(c in d.columns for c in need_any):
@@ -84,7 +90,11 @@ def plot_investor_net_and_ratio(d: pd.DataFrame, market: str, window_days: int |
             d[c] = _safe_num(d[c])
 
     # ratio 자동 생성(없으면)
-    denom = d["turnover_krw"].replace({0: pd.NA}) if "turnover_krw" in d.columns else pd.Series([pd.NA] * len(d))
+    if "turnover_krw" in d.columns:
+        denom = d["turnover_krw"].replace({0: pd.NA})
+    else:
+        denom = pd.Series([pd.NA] * len(d), index=d.index)
+
     if "individual_net" in d.columns and "individual_ratio" not in d.columns and "turnover_krw" in d.columns:
         d["individual_ratio"] = d["individual_net"] / denom
     if "foreign_net" in d.columns and "foreign_ratio" not in d.columns and "turnover_krw" in d.columns:
@@ -92,9 +102,13 @@ def plot_investor_net_and_ratio(d: pd.DataFrame, market: str, window_days: int |
     if "institution_net" in d.columns and "institution_ratio" not in d.columns and "turnover_krw" in d.columns:
         d["institution_ratio"] = d["institution_net"] / denom
 
-    fig, ax1 = plt.subplots(figsize=(12, 6))
+    # --- figure: 2 panels ---
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1, figsize=(12, 8), sharex=True,
+        gridspec_kw={"height_ratios": [2, 1]}
+    )
 
-    # net bars in KRW bn
+    # --- Top: net bars (KRW bn) ---
     scale = 1e9
     width = 0.9
     alpha = 0.55
@@ -103,34 +117,54 @@ def plot_investor_net_and_ratio(d: pd.DataFrame, market: str, window_days: int |
         ax1.bar(d["date"], d["individual_net"] / scale, width=width, alpha=alpha, label="Individual net (₩bn)")
     if "foreign_net" in d.columns:
         ax1.bar(d["date"], d["foreign_net"] / scale, width=width, alpha=alpha, label="Foreign net (₩bn)")
-    if "institution_net" in d.columns:
+    if use_institution_bars and "institution_net" in d.columns:
         ax1.bar(d["date"], d["institution_net"] / scale, width=width, alpha=alpha, label="Institution net (₩bn)")
 
+    ax1.axhline(0, linewidth=1)
     ax1.set_ylabel("Net flow (KRW, Billion)")
-    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
-    ax1.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax1.xaxis.get_major_locator()))
 
-    # ratio lines
-    ax2 = ax1.twinx()
-    if "individual_ratio" in d.columns:
-        ax2.plot(d["date"], d["individual_ratio"], label="Individual/Turnover")
+    # --- Bottom: foreign ratio z-score with +/-2 shading ---
     if "foreign_ratio" in d.columns:
-        ax2.plot(d["date"], d["foreign_ratio"], label="Foreign/Turnover")
-    if "institution_ratio" in d.columns:
-        ax2.plot(d["date"], d["institution_ratio"], label="Institution/Turnover")
+        fr = d["foreign_ratio"].copy()
+        # rolling stats (z_window)
+        mu = fr.rolling(z_window, min_periods=max(20, z_window // 2)).mean()
+        sd = fr.rolling(z_window, min_periods=max(20, z_window // 2)).std()
+        z = (fr - mu) / sd
 
-    ax2.set_ylabel("Net / Turnover (ratio)")
+        ax2.plot(d["date"], z, linewidth=2, label=f"Foreign ratio z-score ({z_window}D)")
+        ax2.axhline(0, linewidth=1)
+        ax2.axhline(2, linestyle="--")
+        ax2.axhline(-2, linestyle="--")
 
-    title = f"{market}: Investor Net (Bar) & Net/Turnover (Line)"
+        # 양방향 과열 음영: z >= 2, z <= -2
+        ax2.fill_between(d["date"], 2, z, where=(z >= 2), alpha=0.15, interpolate=True, label="Overheat inflow (z≥2)")
+        ax2.fill_between(d["date"], -2, z, where=(z <= -2), alpha=0.15, interpolate=True, label="Overheat outflow (z≤-2)")
+
+        ax2.set_ylabel("Foreign net/turnover (z)")
+    else:
+        # foreign_ratio가 없으면 아래패널 생략 느낌으로 안내
+        ax2.text(0.5, 0.5, "foreign_ratio not available", transform=ax2.transAxes,
+                 ha="center", va="center")
+        ax2.set_axis_off()
+
+    # x-axis formatting
+    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax2.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax2.xaxis.get_major_locator()))
+
+    # title
+    title = f"{market}: Investor Net (bars) + Foreign Overheat (z-score)"
     if window_days is not None:
         title += f" — last {window_days}d"
     ax1.set_title(title)
 
-    # legend combine
+    # legends: keep separate so it doesn't explode
     h1, l1 = ax1.get_legend_handles_labels()
+    if h1:
+        ax1.legend(h1, l1, loc="upper left")
+
     h2, l2 = ax2.get_legend_handles_labels()
-    if h1 or h2:
-        ax1.legend(h1 + h2, l1 + l2, loc="upper left")
+    if h2:
+        ax2.legend(h2, l2, loc="upper left")
 
     fig.tight_layout()
     return fig
