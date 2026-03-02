@@ -249,7 +249,16 @@ def prev_business_day(date_str: str) -> str:
 
 
 
-def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path) -> None:
+def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path, market: str = "") -> None:
+    """
+    - 상승=빨강, 하락=파랑(한국식)
+    - |등락률| 클수록 진하게
+    - vmax 자동 스케일(당일 top10 변동폭 기반)
+    - KOSPI/KOSDAQ 색조 살짝 다르게
+    - 범례(legend) 추가
+    """
+    import matplotlib.colors as mcolors
+
     outpath.parent.mkdir(parents=True, exist_ok=True)
 
     if df_top10 is None or df_top10.empty:
@@ -257,6 +266,7 @@ def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path) -> None:
 
     df_top10 = df_top10.copy()
     df_top10["mcap"] = pd.to_numeric(df_top10["mcap"], errors="coerce")
+    df_top10["return_1d"] = pd.to_numeric(df_top10.get("return_1d"), errors="coerce")
     df_top10 = df_top10.dropna(subset=["mcap"])
     df_top10 = df_top10[df_top10["mcap"] > 0]
 
@@ -264,12 +274,102 @@ def make_treemap_png(df_top10: pd.DataFrame, title: str, outpath: Path) -> None:
         raise RuntimeError("Top10 DataFrame has no positive mcap rows: cannot draw treemap")
 
     sizes = df_top10["mcap"].astype(float).tolist()
+    rets = df_top10["return_1d"].fillna(0.0).astype(float).tolist()
     labels = [f"{r['name']}\n{float(r['return_1d']):+.2f}%" for _, r in df_top10.iterrows()]
 
+    # -----------------------------
+    # 1) vmax 자동 스케일링
+    #   - top10의 |등락률|에서 85퍼센타일을 기준으로
+    #   - 너무 작거나 큰 값은 클램프(2~12%)
+    # -----------------------------
+    abs_rets = pd.Series([abs(x) for x in rets if pd.notna(x)])
+    if abs_rets.empty:
+        vmax = 7.0
+    else:
+        vmax = float(abs_rets.quantile(0.85))
+        vmax = max(2.0, min(vmax, 12.0))
+
+    # -----------------------------
+    # 2) 시장별 색조(살짝만)
+    # -----------------------------
+    mk = str(market).upper()
+    if mk == "KOSDAQ":
+        # KOSDAQ: 조금 더 쨍한 톤
+        red_light, red_dark = "#FFE0E0", "#C4001A"
+        blue_light, blue_dark = "#E0ECFF", "#003BB3"
+    else:
+        # KOSPI(기본): 조금 더 차분한 톤
+        red_light, red_dark = "#FFD6D6", "#B00020"
+        blue_light, blue_dark = "#D6E4FF", "#0033A0"
+
+    neutral = "#F2F2F2"
+
+    def lerp(c1, c2, t):
+        a = mcolors.to_rgb(c1)
+        b = mcolors.to_rgb(c2)
+        return tuple(a[i] * (1 - t) + b[i] * t for i in range(3))
+
+    def ret_to_color(ret):
+        if ret is None or pd.isna(ret):
+            return "#DDDDDD"
+        r = float(ret)
+        t = min(abs(r) / vmax, 1.0)  # 0~1
+        if r > 0:
+            return lerp(red_light, red_dark, t)
+        if r < 0:
+            return lerp(blue_light, blue_dark, t)
+        return neutral
+
+    colors = [ret_to_color(x) for x in rets]
+
+    # -----------------------------
+    # 3) Draw
+    # -----------------------------
     plt.figure(figsize=(10, 6))
-    squarify.plot(sizes=sizes, label=labels, alpha=0.9)
-    plt.title(title)
+    squarify.plot(
+        sizes=sizes,
+        label=labels,
+        color=colors,
+        alpha=0.95,
+        # text_kwargs={"fontsize": 10}  # 필요하면 켜
+    )
+
+    plt.title(f"{title} (색상기준 ±{vmax:.1f}%)")
     plt.axis("off")
+
+    # -----------------------------
+    # 4) Legend(범례) 추가: 좌하단
+    # -----------------------------
+    # -3단계 예시(약/중/강). vmax 기반으로 퍼센트 표시
+    levels = [0.33, 0.66, 1.0]
+    pos_pcts = [vmax * lv for lv in levels]
+    neg_pcts = [-vmax * lv for lv in levels]
+
+    legend_handles = []
+    legend_labels = []
+
+    # 상승(빨강)
+    for p in pos_pcts:
+        legend_handles.append(plt.Line2D([0], [0], marker='s', linestyle='', markersize=10,
+                                         markerfacecolor=ret_to_color(p), markeredgecolor='none'))
+        legend_labels.append(f"+{p:.1f}%")
+
+    # 하락(파랑)
+    for p in neg_pcts:
+        legend_handles.append(plt.Line2D([0], [0], marker='s', linestyle='', markersize=10,
+                                         markerfacecolor=ret_to_color(p), markeredgecolor='none'))
+        legend_labels.append(f"{p:.1f}%")
+
+    plt.legend(
+        legend_handles,
+        legend_labels,
+        loc="lower left",
+        frameon=True,
+        fontsize=9,
+        title="등락률 강도",
+        title_fontsize=9
+    )
+
     plt.tight_layout()
     plt.savefig(outpath, dpi=150)
     plt.close()
@@ -529,7 +629,9 @@ def main():
                 df_top,
                 f"{mk} 시총 TOP{TOP_N} — {date_str}",
                 OUT_CHART / f"treemap_{mk.lower()}_top10_latest.png",
+                market=mk
             )
+            
     except Exception as e:
         dashboard["extras"]["top10_error"] = str(e)
         
