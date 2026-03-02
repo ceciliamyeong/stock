@@ -42,6 +42,10 @@ def _to_num(x):
 
 
 def fetch_top10_from_naver(market: str) -> pd.DataFrame:
+    import re
+    import requests
+    import pandas as pd
+
     sosok = "0" if market.upper() == "KOSPI" else "1"
     url = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page=1"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -52,32 +56,35 @@ def fetch_top10_from_naver(market: str) -> pd.DataFrame:
 
     tables = pd.read_html(r.text)
 
-    # ✅ '종목명' 컬럼이 있는 테이블을 찾아서 사용
+    # ✅ '종목명' 컬럼 있는 테이블 찾기 (tables[0] 고정 금지)
     df = None
     for t in tables:
         if "종목명" in t.columns:
             df = t.copy()
             break
     if df is None:
-        # 디버깅용: 어떤 테이블들이 왔는지 에러 메시지에 남김
-        raise RuntimeError(f"Naver parse failed: no table has '종목명'. tables_cols={[list(t.columns) for t in tables[:5]]}")
+        raise RuntimeError(f"Naver parse failed: '종목명' table not found. cols={[list(t.columns) for t in tables[:5]]}")
 
     df = df.dropna(subset=["종목명"]).copy()
 
-    # 컬럼 선택
+    def to_num(x):
+        s = str(x).replace(",", "").strip()
+        s = re.sub(r"[^\d\.\-]", "", s)
+        return pd.to_numeric(s, errors="coerce")
+
     close_col = "현재가" if "현재가" in df.columns else ("종가" if "종가" in df.columns else None)
-    mcap_col = next((c for c in df.columns if "시가총액" in str(c)), None)
-    ret_col = next((c for c in df.columns if "등락률" in str(c)), None)
+    mcap_col  = next((c for c in df.columns if "시가총액" in str(c)), None)
+    ret_col   = next((c for c in df.columns if "등락률" in str(c)), None)
 
     if close_col is None or mcap_col is None:
-        raise RuntimeError(f"Naver table missing required cols. columns={list(df.columns)}")
+        raise RuntimeError(f"Naver table missing cols. columns={list(df.columns)}")
 
     out = pd.DataFrame()
+    out["ticker"] = ""  # treemap엔 없어도 됨
     out["name"] = df["종목명"].astype(str)
-    out["close"] = df[close_col].map(_to_num)
-    out["mcap"] = df[mcap_col].map(_to_num) * 1e8  # ✅ 억원 -> 원
-    out["return_1d"] = df[ret_col].map(_to_num) if ret_col else 0.0
-    out["ticker"] = ""  # treemap엔 필요 없음
+    out["close"] = df[close_col].map(to_num)
+    out["mcap"] = df[mcap_col].map(to_num) * 1e8  # ✅ 억원 → 원
+    out["return_1d"] = df[ret_col].map(to_num) if ret_col else 0.0
 
     out = out.dropna(subset=["mcap"]).sort_values("mcap", ascending=False).head(10).reset_index(drop=True)
     return out[["ticker", "name", "close", "mcap", "return_1d"]]
