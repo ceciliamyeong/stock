@@ -54,15 +54,17 @@ jobs:
             python scripts/backfill_liquidity.py --start "${{ inputs.start }}" --end "${{ inputs.end }}" --market "${{ inputs.market }}"
           fi
 
-          # Rebuild derived outputs after backfill
-          python scripts/build_liquidity_signals.py
-          python scripts/build_liquidity_charts.py
-          python scripts/build_dashboard_close.py
 
       - name: Cleanup liquidity_daily.csv (optional)
         if: ${{ inputs.cleanup == 'YES' }}
         run: |
           python scripts/cleanup_liquidity_daily.py
+
+      - name: Rebuild derived outputs
+        run: |
+          python scripts/build_liquidity_signals.py
+          python scripts/build_liquidity_charts.py
+          python scripts/build_dashboard_close.py
 
       - name: Commit & Push
         run: |
