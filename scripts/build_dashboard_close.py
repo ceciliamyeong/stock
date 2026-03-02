@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional, List
 
 import pandas as pd
 
-
+import re
 import requests
 from pykrx import stock
 
@@ -35,57 +35,72 @@ OUT_CHART = ROOT / "data" / "derived" / "charts"
 
 
 
+def _to_num(x):
+    s = str(x).replace(",", "").strip()
+    s = re.sub(r"[^\d\.\-]", "", s)
+    return pd.to_numeric(s, errors="coerce")
 
+
+def fetch_top10_from_naver(market: str) -> pd.DataFrame:
+    sosok = "0" if market.upper() == "KOSPI" else "1"
+    url = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page=1"
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    r = requests.get(url, headers=headers, timeout=20)
+    r.raise_for_status()
+    r.encoding = r.apparent_encoding
+
+    tables = pd.read_html(r.text)
+    df = tables[0].copy()
+    df = df.dropna(subset=["종목명"])
+
+    close_col = "현재가" if "현재가" in df.columns else "종가"
+    mcap_col = next((c for c in df.columns if "시가총액" in str(c)), None)
+    ret_col  = next((c for c in df.columns if "등락률" in str(c)), None)
+
+    out = pd.DataFrame()
+    out["name"] = df["종목명"].astype(str)
+    out["close"] = df[close_col].map(_to_num)
+    out["mcap"] = df[mcap_col].map(_to_num) * 1e8   # ✅ 억원 → 원
+    out["return_1d"] = df[ret_col].map(_to_num) if ret_col else 0.0
+    out["ticker"] = ""
+
+    out = out.dropna(subset=["mcap"]).sort_values("mcap", ascending=False).head(10).reset_index(drop=True)
+    return out[["ticker", "name", "close", "mcap", "return_1d"]]
 
 # ------------------------
 # Top10 treemap data collection (pykrx wrapper with column-safe logic)
 # ------------------------
 
 def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
-    """
-    pykrx를 사용하여 시가총액 상위 10개 종목 데이터를 가져옵니다.
-    KeyError(['종가', '시가총액' 등]) 방지를 위해 유연한 컬럼 선택 로직을 사용합니다.
-    """
-    d = to_krx_date(date_str)
-    
-    # 1. 시가총액 정보 가져오기 (MDCSTAT01501과 동일한 데이터)
-    df = stock.get_market_cap_by_ticker(d, market=market)
-    
-    if df is None or df.empty:
-        raise RuntimeError(f"pykrx 데이터 수집 실패: {date_str} / {market}")
+    try:
+        d = to_krx_date(date_str)
+        df = stock.get_market_cap_by_ticker(d, market=market)
+        if df is None or df.empty:
+            raise RuntimeError("pykrx empty")
 
-    # 2. 컬럼명 유연하게 선택 (버전/환경 차이 방어)
-    # _pick_col 함수를 사용하여 후보군 중 존재하는 컬럼을 선택합니다.
-    close_col = _pick_col(df, [
-        "종가", "현재가",
-        "Close", "CLOSE", "close"
-    ])
-    
-    mcap_col = _pick_col(df, [
-        "시가총액", "상장시가총액",
-        "Market Cap", "MARKET_CAP", "MCAP", "mcap"
-    ])
-    
-    # 등락률 컬럼 찾기 (없을 경우 0으로 처리하기 위해 안전하게 검색)
-    ret_col = next((c for c in df.columns if any(k in c for k in ["등락률", "Change", "Ratio"])), None)
+        close_col = _pick_col(df, ["종가", "현재가", "Close"])
+        mcap_col  = _pick_col(df, ["시가총액", "상장시가총액", "Market Cap"])
+        ret_col   = next((c for c in df.columns if "등락률" in str(c)), None)
 
-    # 3. 데이터 정리 및 상위 10개 추출
-    df = df.sort_values(mcap_col, ascending=False).head(10).copy()
-    
-    df["ticker"] = df.index.astype(str)
-    df["name"] = df["ticker"].map(stock.get_market_ticker_name)
-    df["close"] = pd.to_numeric(df[close_col], errors="coerce")
-    df["mcap"] = pd.to_numeric(df[mcap_col], errors="coerce")
-    
-    # 등락률 데이터가 있다면 숫자로 변환, 없으면 0.0으로 기본값 설정
-    if ret_col:
-        df["return_1d"] = pd.to_numeric(df[ret_col], errors="coerce")
-    else:
-        df["return_1d"] = 0.0
+        df = df.sort_values(mcap_col, ascending=False).head(10).copy()
+        df["ticker"] = df.index.astype(str)
+        df["name"] = df["ticker"].map(stock.get_market_ticker_name)
+        df["close"] = pd.to_numeric(df[close_col], errors="coerce")
+        df["mcap"] = pd.to_numeric(df[mcap_col], errors="coerce")
+        df["return_1d"] = pd.to_numeric(df[ret_col], errors="coerce") if ret_col else 0.0
 
-    # 불필요한 행 제거 및 최종 컬럼 반환
-    df = df.dropna(subset=["mcap"]).reset_index(drop=True)
-    return df[["ticker", "name", "close", "mcap", "return_1d"]]
+        out = df[["ticker", "name", "close", "mcap", "return_1d"]]
+        out = out.dropna(subset=["mcap"]).reset_index(drop=True)
+
+        if out.empty:
+            raise RuntimeError("pykrx cleaned empty")
+
+        return out
+
+    except Exception as e:
+        print(f"[Top10] pykrx failed -> fallback to Naver ({market})", e)
+        return fetch_top10_from_naver(market)
 
 
 # ------------------------
