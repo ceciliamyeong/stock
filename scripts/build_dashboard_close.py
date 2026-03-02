@@ -34,37 +34,27 @@ OUT_ARCHIVE = OUT_BASE / "archive"
 OUT_CHART = ROOT / "data" / "derived" / "charts"
 
 
-
-def _to_num(x):
-    s = str(x).replace(",", "").strip()
-    s = re.sub(r"[^\d\.\-]", "", s)
-    return pd.to_numeric(s, errors="coerce")
-
-
 def fetch_top10_from_naver(market: str) -> pd.DataFrame:
     import re
     import requests
     import pandas as pd
+    from io import StringIO
 
     sosok = "0" if market.upper() == "KOSPI" else "1"
     url = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page=1"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com/"}
 
     r = requests.get(url, headers=headers, timeout=20)
     r.raise_for_status()
-    r.encoding = r.apparent_encoding
 
-    tables = pd.read_html(r.text)
+    # 🔥 CI 인코딩 깨짐 방지
+    r.encoding = "euc-kr"
 
-    # ✅ '종목명' 컬럼 있는 테이블 찾기 (tables[0] 고정 금지)
-    df = None
-    for t in tables:
-        if "종목명" in t.columns:
-            df = t.copy()
-            break
-    if df is None:
-        raise RuntimeError(f"Naver parse failed: '종목명' table not found. cols={[list(t.columns) for t in tables[:5]]}")
+    tables = pd.read_html(StringIO(r.text), match="종목명")
+    if not tables:
+        raise RuntimeError("Naver parse failed: no table matched '종목명'")
 
+    df = tables[0].copy()
     df = df.dropna(subset=["종목명"]).copy()
 
     def to_num(x):
@@ -80,10 +70,10 @@ def fetch_top10_from_naver(market: str) -> pd.DataFrame:
         raise RuntimeError(f"Naver table missing cols. columns={list(df.columns)}")
 
     out = pd.DataFrame()
-    out["ticker"] = ""  # treemap엔 없어도 됨
+    out["ticker"] = ""
     out["name"] = df["종목명"].astype(str)
     out["close"] = df[close_col].map(to_num)
-    out["mcap"] = df[mcap_col].map(to_num) * 1e8  # ✅ 억원 → 원
+    out["mcap"] = df[mcap_col].map(to_num) * 1e8
     out["return_1d"] = df[ret_col].map(to_num) if ret_col else 0.0
 
     out = out.dropna(subset=["mcap"]).sort_values("mcap", ascending=False).head(10).reset_index(drop=True)
