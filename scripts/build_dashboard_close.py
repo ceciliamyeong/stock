@@ -119,18 +119,18 @@ def to_dash_date(s: str) -> str:
 
 
 def _pick_col(df: pd.DataFrame, candidates: List[str]) -> str:
-    # 1. 정확히 일치하는 컬럼 확인
+    # 1. 후보군 중 정확히 일치하는 컬럼이 있는지 확인
     for c in candidates:
         if c in df.columns:
             return c
     
-    # 2. 부분 일치(키워드 포함) 확인 (예: '종가(원)' 등 대응)
+    # 2. 정확히 일치하는 게 없다면, 후보 단어가 포함된 컬럼을 찾음 (KRX '상장시가총액' 등 대응)
     for c in candidates:
         for col in df.columns:
             if c in str(col):
                 return col
                 
-    raise KeyError(f"None of candidates {candidates} found in {df.columns.tolist()}")
+    raise KeyError(f"검색 후보 {candidates}를 찾을 수 없습니다. 현재 컬럼: {df.columns.tolist()}")
 
 def signal_label(ratio: Optional[float], strong: float = 0.05, normal: float = 0.02) -> Optional[str]:
     if ratio is None:
@@ -212,9 +212,9 @@ def fetch_top10_mcap_and_return(date_str: str, market: str) -> pd.DataFrame:
     if prev_ohlcv is None or prev_ohlcv.empty:
         raise RuntimeError(f"pykrx ohlcv empty: date={prev_str}, market={market}")
 
-    close_col = _pick_col(cap, ["종가", "Close", "현재가"])
-    mcap_col = _pick_col(cap, ["시가총액", "Market Cap", "MCAP"])
-    prev_close_col = _pick_col(prev_ohlcv, ["종가", "Close", "현재가"])
+    close_col = _pick_col(cap, ["종가", "현재가", "Close"]) 
+    mcap_col = _pick_col(cap, ["시가총액", "상장시가", "Market Cap"])
+    prev_close_col = _pick_col(prev_ohlcv, ["종가", "현재가", "Close"])
 
     df = cap[[close_col, mcap_col]].copy()
     df = df.rename(columns={close_col: "close", mcap_col: "mcap"})
