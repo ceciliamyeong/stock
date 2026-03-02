@@ -57,70 +57,70 @@
     "top10_treemap": {
       "KOSPI": [
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "삼성전자",
           "close": 216500.0,
           "mcap": 1281601600000000.0,
           "return_1d": -0.69
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "SK하이닉스",
           "close": 1061000.0,
           "mcap": 756177200000000.0,
           "return_1d": -3.46
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "현대차",
           "close": 674000.0,
           "mcap": 138006700000000.0,
           "return_1d": 10.67
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "삼성전자우",
           "close": 143800.0,
           "mcap": 117337200000000.0,
           "return_1d": -3.3
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "LG에너지솔루션",
           "close": 427000.0,
           "mcap": 99918000000000.0,
           "return_1d": 0.0
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "SK스퀘어",
           "close": 645000.0,
           "mcap": 85196200000000.0,
           "return_1d": -5.01
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "삼성바이오로직스",
           "close": 1778000.0,
           "mcap": 82305300000000.0,
           "return_1d": 0.68
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "기아",
           "close": 205500.0,
           "mcap": 80229900000000.0,
           "return_1d": -0.24
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "두산에너빌리티",
           "close": 106300.0,
           "mcap": 68091600000000.0,
           "return_1d": 2.41
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "HD현대중공업",
           "close": 603000.0,
           "mcap": 63291600000000.0,
@@ -129,70 +129,70 @@
       ],
       "KOSDAQ": [
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "에코프로",
           "close": 185000.0,
           "mcap": 25118600000000.0,
           "return_1d": 0.43
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "알테오젠",
           "close": 407500.0,
           "mcap": 21803600000000.0,
           "return_1d": 1.12
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "에코프로비엠",
           "close": 221500.0,
           "mcap": 21668400000000.0,
           "return_1d": 0.91
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "삼천당제약",
           "close": 825000.0,
           "mcap": 19352400000000.0,
           "return_1d": 8.98
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "레인보우로보틱스",
           "close": 860000.0,
           "mcap": 16683900000000.0,
           "return_1d": -2.27
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "에이비엘바이오",
           "close": 194000.0,
           "mcap": 10727800000000.0,
           "return_1d": 1.52
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "코오롱티슈진",
           "close": 107000.0,
           "mcap": 8908400000000.0,
           "return_1d": 1.9
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "리노공업",
           "close": 106200.0,
           "mcap": 8093700000000.0,
           "return_1d": -0.56
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "케어젠",
           "close": 136800.0,
           "mcap": 7348200000000.0,
           "return_1d": -2.01
         },
         {
-          "ticker": NaN,
+          "ticker": null,
           "name": "리가켐바이오",
           "close": 191700.0,
           "mcap": 7018200000000.0,
