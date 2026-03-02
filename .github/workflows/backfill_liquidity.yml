@@ -42,6 +42,7 @@ jobs:
         run: |
           python scripts/backfill_liquidity.py --start "${{ inputs.start }}" --end "${{ inputs.end }}" --market "${{ inputs.market }}"
           python scripts/build_liquidity_signals.py
+          python scripts/build_liquidity_charts.py
 
       - name: Commit & Push
         run: |
