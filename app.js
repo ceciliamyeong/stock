@@ -57,6 +57,22 @@ function render() {
     el.innerText = label + ": " + formatKRW(val);
   };
 
+
+    const up = dashboardData.extras?.upjong;
+    if (up) {
+      const topText = (up.top || [])
+        .map(x => `${x.name} ${(x.return_pct > 0 ? "+" : "")}${x.return_pct.toFixed(2)}%`)
+        .join(" / ");
+      const botText = (up.bottom || [])
+        .map(x => `${x.name} ${(x.return_pct > 0 ? "+" : "")}${x.return_pct.toFixed(2)}%`)
+        .join(" / ");
+    
+      document.getElementById("upjong-top").innerText = "업종 상위: " + (topText || "-");
+      document.getElementById("upjong-bottom").innerText = "업종 하위: " + (botText || "-");
+    }
+
+    
+
   setFlow("foreign", m.investor_net_krw.foreign, "외국인");
   setFlow("institution", m.investor_net_krw.institution, "기관");
   setFlow("individual", m.investor_net_krw.individual, "개인");
