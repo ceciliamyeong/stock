@@ -70,7 +70,7 @@
       "KOSPI": {},
       "KOSDAQ": {}
     },
-    "top10_error": "\"None of [Index(['종가', '시가총액', '거래량', '거래대금'], dtype='object')] are in the [columns]\"",
+    "top10_error": "['종목명']",
     "volatility_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\"",
     "breadth_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\""
   }
