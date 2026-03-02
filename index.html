@@ -1,41 +1,276 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>장마감 한눈에 보기</title>
-  <link rel="stylesheet" href="./style.css">
-  <script src="./app.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KRX Dashboard</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --panel:#f6f7f9;
+      --panel2:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --shadow: 0 10px 20px rgba(0,0,0,.05);
+      --blue:#2563eb;
+      --red:#dc2626;
+      --good:#16a34a;
+      --bad:#2563eb; /* 한국식: 하락=파랑 */
+      --warn:#f59e0b;
+      --chip:#eef2ff;
+      --chipText:#1e3a8a;
+    }
+    [data-theme="dark"]{
+      --bg:#0b1220;
+      --panel:#0f172a;
+      --panel2:#111c35;
+      --text:#e5e7eb;
+      --muted:#93a4c7;
+      --border:#1f2a44;
+      --shadow: 0 10px 20px rgba(0,0,0,.30);
+      --blue:#60a5fa;
+      --red:#f87171;
+      --good:#34d399;
+      --bad:#60a5fa;
+      --warn:#fbbf24;
+      --chip:#0b1b3a;
+      --chipText:#bcd3ff;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", Segoe UI, Roboto, Helvetica, Arial;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .container{ max-width: 1100px; margin: 0 auto; padding: 18px; }
+
+    .topbar{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding: 14px 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+    .brand{ display:flex; flex-direction:column; gap:4px; }
+    .brand h1{ margin:0; font-size:18px; letter-spacing:.2px; }
+    .brand .sub{ color: var(--muted); font-size:12px; }
+
+    .actions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .seg{
+      display:flex; background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 999px; overflow:hidden;
+    }
+    .seg button{
+      border:0; background: transparent; color: var(--muted);
+      padding: 8px 12px; cursor:pointer; font-weight:600; font-size:12px;
+    }
+    .seg button.active{ color: var(--text); background: rgba(37,99,235,.10); }
+
+    .btn{
+      border:1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:12px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .grid{ display:grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
+    @media (min-width: 880px){
+      .grid{ grid-template-columns: 1.1fr .9fr; }
+    }
+
+    .card{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .card h2{ margin:0 0 10px 0; font-size:14px; color: var(--muted); font-weight:800; letter-spacing:.2px; }
+    .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 8px 0; border-top: 1px dashed rgba(148,163,184,.35); }
+    .row:first-of-type{ border-top:0; }
+    .k{ color: var(--muted); font-weight:700; font-size:12px; }
+    .v{ font-weight:900; font-size:14px; }
+    .v.big{ font-size:20px; }
+
+    .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+    .chip{
+      background: var(--chip);
+      color: var(--chipText);
+      border: 1px solid rgba(37,99,235,.15);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .badge{
+      font-weight:900;
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      font-size: 12px;
+    }
+    .pos{ color: var(--red); }
+    .neg{ color: var(--bad); }
+    .muted{ color: var(--muted); }
+
+    .two{ display:grid; grid-template-columns:1fr; gap:14px; }
+    @media (min-width: 880px){
+      .two{ grid-template-columns: 1fr 1fr; }
+    }
+
+    .img{
+      width:100%;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+    }
+    .imgwrap{ display:flex; flex-direction:column; gap:10px; }
+    .imgtitle{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .imgtitle .left{ font-weight:900; }
+    .imgtitle .right{ color: var(--muted); font-weight:700; font-size:12px; }
+
+    .list{ display:flex; flex-direction:column; gap:8px; }
+    .item{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding: 10px 12px;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .item .name{ font-weight:900; }
+    .item .sub{ color: var(--muted); font-size:12px; font-weight:700; }
+    .item .right{ display:flex; align-items:center; gap:10px; }
+    .mono{ font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+    .footer{
+      margin: 14px 0 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-align:center;
+    }
+
+    /* signal pills */
+    .sig{ font-weight:900; }
+    .sig.STRONG_BUY, .sig.NORMAL_BUY, .sig.WEAK_BUY{ color: var(--red); }
+    .sig.STRONG_SELL, .sig.NORMAL_SELL, .sig.WEAK_SELL{ color: var(--bad); }
+    .sig.WEAK{ color: var(--muted); }
+
+  </style>
 </head>
 <body>
-
   <div class="container">
-    <h1 id="date"></h1>
-
-    <div class="tabs">
-      <button onclick="setMarket('KOSPI')">KOSPI</button>
-      <button onclick="setMarket('KOSDAQ')">KOSDAQ</button>
-    </div>
-
-    <div class="card">
-      <h2 id="market-name"></h2>
-      <div class="big-number" id="close"></div>
-      <div id="turnover"></div>
-      <div class="flow">
-        <div id="foreign"></div>
-        <div id="institution"></div>
-        <div id="individual"></div>
+    <div class="topbar">
+      <div class="brand">
+        <h1>국내증시 데일리 대시보드</h1>
+        <div class="sub"><span id="date">—</span> · <span class="muted">KOSPI/KOSDAQ 요약</span></div>
       </div>
-      <div id="upjong-top"></div>
-      <div id="upjong-bottom"></div>
+
+      <div class="actions">
+        <div class="seg" aria-label="market switch">
+          <button id="btn-kospi" class="active" onclick="setMarket('KOSPI')">KOSPI</button>
+          <button id="btn-kosdaq" onclick="setMarket('KOSDAQ')">KOSDAQ</button>
+        </div>
+
+        <div class="seg" aria-label="range switch">
+          <button id="btn-range-1y" class="active" onclick="setRange('1y')">1Y</button>
+          <button id="btn-range-all" onclick="setRange('all')">ALL</button>
+        </div>
+
+        <button id="theme-toggle" class="btn" type="button" aria-label="theme toggle">
+          <span>🌓</span><span id="theme-label">Dark</span>
+        </button>
+      </div>
     </div>
 
-    <div class="card">
-      <h3>시총 TOP10</h3>
-      <img id="treemap" width="100%">
+    <div class="grid">
+      <div class="card">
+        <h2>시장 스냅샷</h2>
+        <div class="row">
+          <div class="k">지수</div>
+          <div class="v big mono" id="close">—</div>
+        </div>
+        <div class="row">
+          <div class="k">거래대금</div>
+          <div class="v mono" id="turnover">—</div>
+        </div>
+
+        <div class="row">
+          <div class="k">투자자 매매 (순매수)</div>
+          <div class="chips" id="flows"></div>
+        </div>
+
+        <div class="row">
+          <div class="k">시그널</div>
+          <div class="chips" id="signals"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>업종 상·하위 3</h2>
+        <div class="two">
+          <div>
+            <div class="muted" style="font-weight:900;margin-bottom:8px;">상위</div>
+            <div class="list" id="upjong-top"></div>
+          </div>
+          <div>
+            <div class="muted" style="font-weight:900;margin-bottom:8px;">하위</div>
+            <div class="list" id="upjong-bottom"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
+    <div class="two" style="margin-top:14px;">
+      <div class="card">
+        <h2>시총 TOP10 등락 (Treemap)</h2>
+        <div class="imgwrap">
+          <div class="imgtitle">
+            <div class="left" id="treemap-title">—</div>
+            <div class="right">상승=빨강 · 하락=파랑 · 진하기=강도</div>
+          </div>
+          <img class="img" id="treemap" alt="treemap" />
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>시총 TOP10 리스트</h2>
+        <div class="list" id="top10-list"></div>
+      </div>
+    </div>
+
+    <div class="two" style="margin-top:14px;">
+      <div class="card">
+        <h2>지수 vs 거래대금</h2>
+        <img class="img" id="chart-close-turnover" alt="close vs turnover" />
+      </div>
+      <div class="card">
+        <h2>투자자 순매수/거래대금 비율</h2>
+        <img class="img" id="chart-investor-ratio" alt="investor net ratio" />
+      </div>
+    </div>
+
+    <div class="footer">
+      데이터 소스: (지수/매매/거래대금) 내부 CSV · (TOP10/업종) 네이버 금융 · 배포: GitHub Pages
+    </div>
   </div>
 
-<script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
