@@ -13,10 +13,16 @@ OUT_SUMMARY = OUT_DIR / "latest_summary.json"
 
 def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["date"] = pd.to_datetime(df["date"])
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    for c in ["turnover_krw", "close"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df = df.dropna(subset=["date", "market", "turnover_krw", "close"])
+    df["date"] = df["date"].dt.normalize()
     df = df.sort_values(["market", "date"]).reset_index(drop=True)
 
-    # group by market
     out = []
     for m, g in df.groupby("market", sort=False):
         g = g.sort_values("date").reset_index(drop=True)
@@ -25,7 +31,7 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
         g["turnover_std20"] = g["turnover_krw"].rolling(20, min_periods=5).std()
 
         g["turnover_ratio20"] = g["turnover_krw"] / g["turnover_ma20"]
-        g["turnover_z20"] = (g["turnover_krw"] - g["turnover_ma20"]) / g["turnover_std20"]
+        g["turnover_z20"] = (g["turnover_krw"] - g["turnover_ma20"]) / g["turnover_std20"].replace({0: pd.NA})
 
         g["turnover_chg_5d"] = g["turnover_krw"].pct_change(5)
         g["turnover_chg_20d"] = g["turnover_krw"].pct_change(20)
@@ -36,8 +42,7 @@ def compute_signals(df: pd.DataFrame) -> pd.DataFrame:
 
         out.append(g)
 
-    out_df = pd.concat(out, ignore_index=True)
-    out_df = out_df.sort_values(["date", "market"]).reset_index(drop=True)
+    out_df = pd.concat(out, ignore_index=True).sort_values(["date", "market"]).reset_index(drop=True)
     return out_df
 
 
@@ -47,7 +52,7 @@ def build_latest_summary(sig: pd.DataFrame) -> dict:
 
     def pack(row):
         return {
-            "turnover_krw": float(row["turnover_krw"]),
+            "turnover_krw": None if pd.isna(row["turnover_krw"]) else float(row["turnover_krw"]),
             "turnover_ratio20": None if pd.isna(row["turnover_ratio20"]) else float(row["turnover_ratio20"]),
             "turnover_z20": None if pd.isna(row["turnover_z20"]) else float(row["turnover_z20"]),
             "turnover_chg_5d": None if pd.isna(row["turnover_chg_5d"]) else float(row["turnover_chg_5d"]),
@@ -65,6 +70,8 @@ def main():
 
     df = pd.read_csv(DATA_IN)
     sig = compute_signals(df)
+
+    sig["date"] = sig["date"].dt.strftime("%Y-%m-%d")
 
     sig.to_csv(OUT_CSV, index=False, encoding="utf-8-sig")
 
