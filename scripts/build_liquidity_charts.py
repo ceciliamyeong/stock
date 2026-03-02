@@ -22,7 +22,9 @@ def _safe_num(s):
 
 def _prep_market(df: pd.DataFrame, market: str) -> pd.DataFrame:
     d = df[df["market"] == market].copy()
-    d["date"] = pd.to_datetime(d["date"])
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    d = d.dropna(subset=["date"])
+    d["date"] = d["date"].dt.normalize()  # 시간 제거
     d = d.sort_values("date").reset_index(drop=True)
     return d
 
