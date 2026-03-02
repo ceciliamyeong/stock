@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Any
 
 import pandas as pd
 from pykrx import stock
+from datetime import datetime
 
 # 1. 경로 설정 (scripts 폴더 내부 실행 대응)
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ MERGED_CSV = ROOT / "data" / "derived" / "market_flow_daily.csv"
 DERIVED_DIR = ROOT / "data" / "derived"
 HISTORY_DIR = ROOT / "data" / "history"
 
-FORCE_CLOSE_DATE = "2026-02-27"
+
 RAW_UNIT_HINT = "(십억원)"
 MARKETS = ["KOSPI", "KOSDAQ"]
 
@@ -86,7 +87,8 @@ def _fetch_investor_long(date_str: str) -> pd.DataFrame:
 
 def main():
     ensure_dirs()
-    date_str = FORCE_CLOSE_DATE
+    
+    date_str = datetime.now().strftime("%Y-%m-%d")
     print(f"🚀 Processing Date: {date_str}")
 
     # 1. 투자자별 상세 데이터 가져오기
