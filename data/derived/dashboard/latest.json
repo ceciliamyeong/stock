@@ -213,10 +213,35 @@
       "KOSDAQ": {}
     },
     "upjong": {
-      "top": [],
-      "bottom": []
+      "top": [
+        {
+          "name": "자동차",
+          "return_pct": 6.28
+        },
+        {
+          "name": "에너지장비및서비스",
+          "return_pct": 4.31
+        },
+        {
+          "name": "창업투자",
+          "return_pct": 3.93
+        }
+      ],
+      "bottom": [
+        {
+          "name": "디스플레이패널",
+          "return_pct": -8.87
+        },
+        {
+          "name": "전기유틸리티",
+          "return_pct": -5.54
+        },
+        {
+          "name": "손해보험",
+          "return_pct": -4.93
+        }
+      ]
     },
-    "upjong_error": "['업종명']",
     "volatility_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\"",
     "breadth_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\""
   }
