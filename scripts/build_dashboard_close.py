@@ -463,7 +463,7 @@ def main():
     inv = load_inv_df()
 
     date_str = sorted(liq["date"].unique())[-1]   # 가장 최근 데이터 자동 선택
-    print("Dashboard date:", date_str))
+    print("Dashboard date:", date_str)
 
     liq_day = load_index_rows(liq, date_str)
     inv_day = inv[inv["date"] == date_str].copy() if inv is not None and not inv.empty else pd.DataFrame()
