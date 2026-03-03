@@ -59,144 +59,144 @@
         {
           "ticker": null,
           "name": "삼성전자",
-          "close": 209750.0,
-          "mcap": 1241644100000000.0,
-          "return_1d": -3.12
+          "close": 209000.0,
+          "mcap": 1237204300000000.0,
+          "return_1d": -3.46
         },
         {
           "ticker": null,
           "name": "SK하이닉스",
-          "close": 1029000.0,
-          "mcap": 733370700000000.0,
-          "return_1d": -3.02
+          "close": 1021000.0,
+          "mcap": 727669100000000.0,
+          "return_1d": -3.77
         },
         {
           "ticker": null,
           "name": "현대차",
-          "close": 642000.0,
-          "mcap": 131454500000000.0,
-          "return_1d": -4.75
+          "close": 637000.0,
+          "mcap": 130430700000000.0,
+          "return_1d": -5.49
         },
         {
           "ticker": null,
           "name": "삼성전자우",
-          "close": 137200.0,
-          "mcap": 111951700000000.0,
-          "return_1d": -4.59
+          "close": 136800.0,
+          "mcap": 111625300000000.0,
+          "return_1d": -4.87
         },
         {
           "ticker": null,
           "name": "LG에너지솔루션",
-          "close": 416000.0,
-          "mcap": 97344000000000.0,
-          "return_1d": -2.58
+          "close": 413750.0,
+          "mcap": 96817500000000.0,
+          "return_1d": -3.1
         },
         {
           "ticker": null,
           "name": "SK스퀘어",
-          "close": 628000.0,
-          "mcap": 82950700000000.0,
-          "return_1d": -2.64
+          "close": 621000.0,
+          "mcap": 82026100000000.0,
+          "return_1d": -3.72
         },
         {
           "ticker": null,
           "name": "삼성바이오로직스",
-          "close": 1730000.0,
-          "mcap": 80083300000000.0,
-          "return_1d": -2.7
+          "close": 1727000.0,
+          "mcap": 79944500000000.0,
+          "return_1d": -2.87
         },
         {
           "ticker": null,
           "name": "기아",
-          "close": 193100.0,
-          "mcap": 75388700000000.0,
-          "return_1d": -6.03
+          "close": 192000.0,
+          "mcap": 74959300000000.0,
+          "return_1d": -6.57
         },
         {
           "ticker": null,
           "name": "한화에어로스페이스",
-          "close": 1376000.0,
-          "mcap": 70951200000000.0,
-          "return_1d": 15.15
+          "close": 1368000.0,
+          "mcap": 70538700000000.0,
+          "return_1d": 14.48
         },
         {
           "ticker": null,
           "name": "두산에너빌리티",
-          "close": 104100.0,
-          "mcap": 66682400000000.0,
-          "return_1d": -2.07
+          "close": 103700.0,
+          "mcap": 66426200000000.0,
+          "return_1d": -2.45
         }
       ],
       "KOSDAQ": [
         {
           "ticker": null,
           "name": "에코프로",
-          "close": 188900.0,
-          "mcap": 25648100000000.0,
-          "return_1d": 2.11
-        },
-        {
-          "ticker": null,
-          "name": "에코프로비엠",
-          "close": 222750.0,
-          "mcap": 21790600000000.0,
-          "return_1d": 0.56
+          "close": 185300.0,
+          "mcap": 25159300000000.0,
+          "return_1d": 0.16
         },
         {
           "ticker": null,
           "name": "알테오젠",
-          "close": 407000.0,
-          "mcap": 21776900000000.0,
-          "return_1d": -0.12
+          "close": 404500.0,
+          "mcap": 21643100000000.0,
+          "return_1d": -0.74
+        },
+        {
+          "ticker": null,
+          "name": "에코프로비엠",
+          "close": 220000.0,
+          "mcap": 21521600000000.0,
+          "return_1d": -0.68
         },
         {
           "ticker": null,
           "name": "삼천당제약",
-          "close": 822000.0,
-          "mcap": 19282000000000.0,
-          "return_1d": -0.36
+          "close": 821000.0,
+          "mcap": 19258600000000.0,
+          "return_1d": -0.48
         },
         {
           "ticker": null,
           "name": "레인보우로보틱스",
-          "close": 920000.0,
-          "mcap": 17847900000000.0,
-          "return_1d": 6.98
+          "close": 918000.0,
+          "mcap": 17809100000000.0,
+          "return_1d": 6.74
         },
         {
           "ticker": null,
           "name": "에이비엘바이오",
-          "close": 199800.0,
-          "mcap": 11048500000000.0,
-          "return_1d": 2.99
+          "close": 199500.0,
+          "mcap": 11031900000000.0,
+          "return_1d": 2.84
         },
         {
           "ticker": null,
           "name": "코오롱티슈진",
-          "close": 111300.0,
-          "mcap": 9266400000000.0,
-          "return_1d": 4.02
+          "close": 110000.0,
+          "mcap": 9158200000000.0,
+          "return_1d": 2.8
         },
         {
           "ticker": null,
           "name": "리노공업",
-          "close": 121100.0,
-          "mcap": 9229300000000.0,
-          "return_1d": 14.03
-        },
-        {
-          "ticker": null,
-          "name": "케어젠",
-          "close": 142300.0,
-          "mcap": 7643600000000.0,
-          "return_1d": 4.02
+          "close": 119100.0,
+          "mcap": 9076800000000.0,
+          "return_1d": 12.15
         },
         {
           "ticker": null,
           "name": "리가켐바이오",
-          "close": 204500.0,
-          "mcap": 7486800000000.0,
-          "return_1d": 6.68
+          "close": 206500.0,
+          "mcap": 7560000000000.0,
+          "return_1d": 7.72
+        },
+        {
+          "ticker": null,
+          "name": "케어젠",
+          "close": 137900.0,
+          "mcap": 7407300000000.0,
+          "return_1d": 0.8
         }
       ]
     },
@@ -215,33 +215,34 @@
     "upjong": {
       "top": [
         {
-          "name": "우주항공과국방",
-          "return_pct": 14.5
+          "name": "해운사",
+          "return_pct": 13.41
         },
         {
-          "name": "해운사",
-          "return_pct": 13.96
+          "name": "우주항공과국방",
+          "return_pct": 12.98
         },
         {
           "name": "생명과학도구및서비스",
-          "return_pct": 6.08
+          "return_pct": 4.92
         }
       ],
       "bottom": [
         {
           "name": "항공사",
-          "return_pct": -8.08
+          "return_pct": -8.42
         },
         {
           "name": "전자제품",
-          "return_pct": -6.38
+          "return_pct": -8.01
         },
         {
           "name": "전기유틸리티",
-          "return_pct": -5.87
+          "return_pct": -6.51
         }
       ]
     },
+    "naver_live_error": "404 Client Error: 404 for url: https://finance.naver.com/sise/sise_investor.naver?sosok=0",
     "volatility_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\"",
     "breadth_error": "\"None of [Index(['시가', '고가', '저가', '종가'], dtype='object')] are in the [columns]\""
   }
