@@ -183,7 +183,7 @@
         }
       ]
     },
-    "naver_asof_kst": "2026-03-05 20:29:19",
+    "naver_asof_kst": "2026-03-05 20:38:56",
     "market_snapshot_source": "naver_failed",
     "naver_market_snapshot_error": "404 Client Error: 404 for url: https://finance.naver.com/sise/sise_investor.naver?sosok=0"
   }
