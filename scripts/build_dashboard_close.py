@@ -205,10 +205,65 @@ def fetch_investor_flow_from_naver(market: str) -> Dict[str, Optional[float]]:
 def fetch_market_snapshot_from_naver(market: str) -> Dict[str, Any]:
     """
     지수/거래대금 + 투자자 수급을 한 번에 가져오는 통합 스냅샷
+    투자자 수급 실패 시에도 지수/거래대금은 반환
     """
     idx = fetch_index_and_turnover_from_naver(market)
-    flow = fetch_investor_flow_from_naver(market)
+    try:
+        flow = fetch_investor_flow_from_naver(market)
+    except Exception as e:
+        print(f"[Naver investor flow] {market} 실패 (지수/거래대금은 유지): {e}")
+        flow = {"foreign": None, "institution": None, "individual": None}
     return {"close": idx.get("close"), "turnover_krw": idx.get("turnover_krw"), "flow": flow}
+
+
+def fetch_market_snapshot_from_pykrx(market: str, date_str: str) -> Dict[str, Any]:
+    """
+    pykrx 기반 마켓 스냅샷 폴백 (Naver 실패 시 사용)
+    - 지수 종가/거래대금: get_index_ohlcv_by_date
+    - 투자자 순매수: get_market_trading_value_by_investor
+    """
+    d = to_krx_date(date_str)  # "YYYYMMDD"
+
+    # 1. 지수 종가 & 거래대금
+    ticker = "1001" if market.upper() == "KOSPI" else "2001"
+    close = None
+    turnover_krw = None
+    try:
+        df_idx = stock.get_index_ohlcv_by_date(d, d, ticker)
+        if df_idx is not None and not df_idx.empty:
+            close_col = _pick_col(df_idx, ["종가", "Close"])
+            close = float(df_idx[close_col].iloc[-1])
+            try:
+                tv_col = _pick_col(df_idx, ["거래대금", "Turnover", "거래량"])
+                turnover_krw = float(df_idx[tv_col].iloc[-1])
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[pykrx index] {market} {e}")
+
+    # 2. 투자자별 순매수 (원화)
+    flow: Dict[str, Optional[float]] = {"foreign": None, "institution": None, "individual": None}
+    try:
+        df_inv = stock.get_market_trading_value_by_investor(d, d, market)
+        if df_inv is not None and not df_inv.empty:
+            row = df_inv.iloc[-1]
+            cols = list(df_inv.columns)
+            for k_for in ["외국인합계", "외국인"]:
+                if k_for in cols:
+                    flow["foreign"] = float(row[k_for])
+                    break
+            for k_ins in ["기관합계", "기관"]:
+                if k_ins in cols:
+                    flow["institution"] = float(row[k_ins])
+                    break
+            for k_ind in ["개인"]:
+                if k_ind in cols:
+                    flow["individual"] = float(row[k_ind])
+                    break
+    except Exception as e:
+        print(f"[pykrx investor] {market} {e}")
+
+    return {"close": close, "turnover_krw": turnover_krw, "flow": flow}
 
 
 # ------------------------
@@ -944,52 +999,66 @@ def main():
     # ✅ as-of 시간(장중 갱신 확인용)
     dashboard["extras"]["naver_asof_kst"] = now_kst_str()
 
-    # 1) markets: 네이버 스냅샷으로 KOSPI/KOSDAQ 카드 생성
-    try:
-        for mk in ["KOSPI", "KOSDAQ"]:
+    # 1) markets: 네이버 스냅샷 → 실패 시 pykrx 폴백
+    sources_used: list = []
+    for mk in ["KOSPI", "KOSDAQ"]:
+        snap = None
+        try:
             snap = fetch_market_snapshot_from_naver(mk)
+            sources_used.append("naver")
+        except Exception as e_naver:
+            print(f"[Naver] {mk} snapshot failed: {e_naver}, pykrx 폴백 시도")
+            dashboard["extras"][f"naver_{mk.lower()}_error"] = str(e_naver)
+            try:
+                snap = fetch_market_snapshot_from_pykrx(mk, date_str)
+                sources_used.append("pykrx")
+            except Exception as e_pkrx:
+                print(f"[pykrx] {mk} snapshot도 실패: {e_pkrx}")
+                dashboard["extras"][f"pykrx_{mk.lower()}_error"] = str(e_pkrx)
+                sources_used.append("failed")
+                continue
 
-            close = snap.get("close")
-            turnover = snap.get("turnover_krw")
+        if snap is None:
+            continue
 
-            flow = snap.get("flow", {}) or {}
-            foreign = flow.get("foreign")
-            inst = flow.get("institution")
-            indiv = flow.get("individual")
+        close = snap.get("close")
+        turnover = snap.get("turnover_krw")
 
-            def ratio(v: Optional[float]) -> Optional[float]:
-                if v is None or turnover is None or turnover == 0:
-                    return None
-                return float(v) / float(turnover)
+        flow = snap.get("flow", {}) or {}
+        foreign = flow.get("foreign")
+        inst = flow.get("institution")
+        indiv = flow.get("individual")
 
-            ratios = {
-                "foreign": ratio(foreign),
-                "institution": ratio(inst),
-                "individual": ratio(indiv),
-            }
+        def _ratio(v: Optional[float], tv=turnover) -> Optional[float]:
+            if v is None or tv is None or tv == 0:
+                return None
+            return float(v) / float(tv)
 
-            dashboard["markets"][mk] = {
-                "close": close,
-                "turnover_krw": turnover,
-                "turnover_readable": krw_readable(turnover),
-                "investor_net_krw": {"foreign": foreign, "institution": inst, "individual": indiv},
-                "investor_net_readable": {
-                    "foreign": krw_readable(foreign),
-                    "institution": krw_readable(inst),
-                    "individual": krw_readable(indiv),
-                },
-                "investor_ratio": ratios,
-                "flow_signal": {
-                    "foreign": signal_label(ratios["foreign"]),
-                    "institution": signal_label(ratios["institution"]),
-                    "individual": signal_label(ratios["individual"]),
-                },
-            }
+        ratios = {
+            "foreign": _ratio(foreign),
+            "institution": _ratio(inst),
+            "individual": _ratio(indiv),
+        }
 
-        dashboard["extras"]["market_snapshot_source"] = "naver"
-    except Exception as e:
-        dashboard["extras"]["market_snapshot_source"] = "naver_failed"
-        dashboard["extras"]["naver_market_snapshot_error"] = str(e)
+        dashboard["markets"][mk] = {
+            "close": close,
+            "turnover_krw": turnover,
+            "turnover_readable": krw_readable(turnover),
+            "investor_net_krw": {"foreign": foreign, "institution": inst, "individual": indiv},
+            "investor_net_readable": {
+                "foreign": krw_readable(foreign),
+                "institution": krw_readable(inst),
+                "individual": krw_readable(indiv),
+            },
+            "investor_ratio": ratios,
+            "flow_signal": {
+                "foreign": signal_label(ratios["foreign"]),
+                "institution": signal_label(ratios["institution"]),
+                "individual": signal_label(ratios["individual"]),
+            },
+        }
+
+    dashboard["extras"]["market_snapshot_source"] = ",".join(sources_used) if sources_used else "failed"
 
     # 2) Upjong (업종 상/하위) — 네이버 기반인데 너 코드에서 lxml 없으면 깨질 수 있음
     #    (workflow에 pip install lxml html5lib 해주는 건 별도)

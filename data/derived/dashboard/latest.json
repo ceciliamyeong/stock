@@ -1,190 +1,76 @@
 {
   "date": "2026-03-05",
   "version": "1.0",
-  "markets": {},
+  "markets": {
+    "KOSPI": {
+      "close": null,
+      "turnover_krw": null,
+      "turnover_readable": null,
+      "investor_net_krw": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      },
+      "investor_net_readable": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      },
+      "investor_ratio": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      },
+      "flow_signal": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      }
+    },
+    "KOSDAQ": {
+      "close": null,
+      "turnover_krw": null,
+      "turnover_readable": null,
+      "investor_net_krw": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      },
+      "investor_net_readable": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      },
+      "investor_ratio": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      },
+      "flow_signal": {
+        "foreign": null,
+        "institution": null,
+        "individual": null
+      }
+    }
+  },
   "extras": {
     "top10_treemap": {
-      "KOSPI": [
-        {
-          "ticker": null,
-          "name": "삼성전자",
-          "close": 191600.0,
-          "mcap": 1134202600000000.0,
-          "return_1d": 11.27
-        },
-        {
-          "ticker": null,
-          "name": "SK하이닉스",
-          "close": 941000.0,
-          "mcap": 670652900000000.0,
-          "return_1d": 10.84
-        },
-        {
-          "ticker": null,
-          "name": "현대차",
-          "close": 548000.0,
-          "mcap": 112207300000000.0,
-          "return_1d": 9.38
-        },
-        {
-          "ticker": null,
-          "name": "삼성전자우",
-          "close": 128600.0,
-          "mcap": 104934300000000.0,
-          "return_1d": 12.02
-        },
-        {
-          "ticker": null,
-          "name": "LG에너지솔루션",
-          "close": 371500.0,
-          "mcap": 86931000000000.0,
-          "return_1d": 6.91
-        },
-        {
-          "ticker": null,
-          "name": "삼성바이오로직스",
-          "close": 1647000.0,
-          "mcap": 76241200000000.0,
-          "return_1d": 8.64
-        },
-        {
-          "ticker": null,
-          "name": "SK스퀘어",
-          "close": 566000.0,
-          "mcap": 74761300000000.0,
-          "return_1d": 11.64
-        },
-        {
-          "ticker": null,
-          "name": "한화에어로스페이스",
-          "close": 1381000.0,
-          "mcap": 71209100000000.0,
-          "return_1d": 4.38
-        },
-        {
-          "ticker": null,
-          "name": "기아",
-          "close": 166400.0,
-          "mcap": 64964700000000.0,
-          "return_1d": 6.19
-        },
-        {
-          "ticker": null,
-          "name": "HD현대중공업",
-          "close": 559000.0,
-          "mcap": 58673300000000.0,
-          "return_1d": 9.39
-        }
-      ],
-      "KOSDAQ": [
-        {
-          "ticker": null,
-          "name": "에코프로",
-          "close": 160800.0,
-          "mcap": 21832800000000.0,
-          "return_1d": 20.18
-        },
-        {
-          "ticker": null,
-          "name": "알테오젠",
-          "close": 372000.0,
-          "mcap": 19904200000000.0,
-          "return_1d": 12.05
-        },
-        {
-          "ticker": null,
-          "name": "에코프로비엠",
-          "close": 195400.0,
-          "mcap": 19115100000000.0,
-          "return_1d": 18.0
-        },
-        {
-          "ticker": null,
-          "name": "삼천당제약",
-          "close": 796000.0,
-          "mcap": 18672100000000.0,
-          "return_1d": 23.41
-        },
-        {
-          "ticker": null,
-          "name": "레인보우로보틱스",
-          "close": 837000.0,
-          "mcap": 16237700000000.0,
-          "return_1d": 18.89
-        },
-        {
-          "ticker": null,
-          "name": "에이비엘바이오",
-          "close": 177100.0,
-          "mcap": 9793200000000.0,
-          "return_1d": 15.83
-        },
-        {
-          "ticker": null,
-          "name": "리노공업",
-          "close": 121400.0,
-          "mcap": 9252100000000.0,
-          "return_1d": 20.32
-        },
-        {
-          "ticker": null,
-          "name": "코오롱티슈진",
-          "close": 102300.0,
-          "mcap": 8517100000000.0,
-          "return_1d": 12.29
-        },
-        {
-          "ticker": null,
-          "name": "리가켐바이오",
-          "close": 190000.0,
-          "mcap": 6956000000000.0,
-          "return_1d": 17.36
-        },
-        {
-          "ticker": null,
-          "name": "HLB",
-          "close": 50600.0,
-          "mcap": 6735700000000.0,
-          "return_1d": 10.72
-        }
-      ]
+      "KOSPI": [],
+      "KOSDAQ": []
     },
     "treemap_png": {
       "KOSPI": "data/derived/charts/treemap_kospi_top10_latest.png",
       "KOSDAQ": "data/derived/charts/treemap_kosdaq_top10_latest.png"
     },
     "upjong": {
-      "top": [
-        {
-          "name": "통신장비",
-          "return_pct": 15.91
-        },
-        {
-          "name": "생물공학",
-          "return_pct": 14.41
-        },
-        {
-          "name": "생명과학도구및서비스",
-          "return_pct": 13.78
-        }
-      ],
-      "bottom": [
-        {
-          "name": "음료",
-          "return_pct": 2.98
-        },
-        {
-          "name": "운송인프라",
-          "return_pct": 2.98
-        },
-        {
-          "name": "가정용품",
-          "return_pct": 3.05
-        }
-      ]
+      "top": [],
+      "bottom": []
     },
-    "naver_asof_kst": "2026-03-05 19:06:46",
-    "market_snapshot_source": "naver_failed",
-    "naver_market_snapshot_error": "404 Client Error: 404 for url: https://finance.naver.com/sise/sise_investor.naver?sosok=0"
+    "naver_asof_kst": "2026-03-05 20:20:05",
+    "naver_kospi_error": "HTTPSConnectionPool(host='finance.naver.com', port=443): Max retries exceeded with url: /sise/sise_index.naver?code=KOSPI (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+    "naver_kosdaq_error": "HTTPSConnectionPool(host='finance.naver.com', port=443): Max retries exceeded with url: /sise/sise_index.naver?code=KOSDAQ (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+    "market_snapshot_source": "pykrx,pykrx",
+    "upjong_error": "HTTPSConnectionPool(host='finance.naver.com', port=443): Max retries exceeded with url: /sise/sise_group.naver?type=upjong (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+    "top10_error": "HTTPSConnectionPool(host='finance.naver.com', port=443): Max retries exceeded with url: /sise/sise_market_sum.naver?sosok=0&page=1 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))"
   }
 }
