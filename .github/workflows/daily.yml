@@ -54,6 +54,7 @@ jobs:
           if ! git diff --cached --quiet; then
             TODAY=$(date +'%Y-%m-%d')
             git commit -m "Daily update (${TODAY})"
+            git pull --rebase origin main
             git push
           else
             echo "No changes to commit"
